@@ -47,11 +47,9 @@ def add_business():
     address = data.get('address', '').strip()
     keywords = [k.strip() for k in data.get('keywords', []) if k.strip()]
 
-    if not name:
-        return jsonify({'error': 'שם הוא שדה חובה'}), 400
-    if not address and not data.get('lat'):
-    return jsonify({'error': 'נדרשת כתובת או Maps URL'}), 400
-    
+    if not name or not address:
+        return jsonify({'error': 'שם וכתובת הם שדות חובה'}), 400
+
     # אם הועברו קורדינטות ישירות (מ-Maps URL)
     lat = data.get('lat')
     lng = data.get('lng')
