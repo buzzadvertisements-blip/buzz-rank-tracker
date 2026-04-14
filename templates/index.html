@@ -381,7 +381,7 @@
       <label>Business Name</label>
       <input type="text" id="biz-name" placeholder="e.g. Precision Air Care" />
     </div>
-    <div class="form-group">
+    <div class="form-group" id="addr-group">
       <label>Address (אם אין Maps URL)</label>
       <input type="text" id="biz-addr" placeholder="102 W 3rd St, Winston-Salem, NC 27101" />
     </div>
@@ -683,7 +683,12 @@ let parsedCoords = null;
 
 function debounceUrl(val) {
   clearTimeout(urlDebounceTimer);
-  if (!val.trim()) { document.getElementById('maps-url-status').textContent = ''; parsedCoords = null; return; }
+  if (!val.trim()) {
+    document.getElementById('maps-url-status').textContent = '';
+    parsedCoords = null;
+    document.getElementById('addr-group').style.display = '';
+    return;
+  }
   document.getElementById('maps-url-status').textContent = '🔍 מחפש קורדינטות...';
   urlDebounceTimer = setTimeout(() => parseMapsUrl(val), 800);
 }
@@ -702,16 +707,19 @@ async function parseMapsUrl(url) {
       parsedCoords = { lat: data.lat, lng: data.lng };
       status.textContent = '✅ נמצא: ' + data.lat.toFixed(4) + ', ' + data.lng.toFixed(4);
       status.style.color = '#4ade80';
+      document.getElementById('addr-group').style.display = 'none';
       if (data.name && !document.getElementById('biz-name').value) {
         document.getElementById('biz-name').value = data.name;
       }
     } else {
       parsedCoords = null;
+      document.getElementById('addr-group').style.display = '';
       status.textContent = '⚠️ ' + (data.error || 'לא נמצאו קורדינטות');
       status.style.color = '#f87171';
     }
   } catch(e) {
     parsedCoords = null;
+    document.getElementById('addr-group').style.display = '';
     document.getElementById('maps-url-status').textContent = '❌ שגיאה: ' + e.message;
   }
 }
@@ -723,6 +731,7 @@ function openAddBusinessModal() {
   document.getElementById('maps-url-status').textContent = '';
   document.getElementById('biz-name').value = '';
   document.getElementById('biz-addr').value = '';
+  document.getElementById('addr-group').style.display = '';
   document.getElementById('kw-input').value = '';
   document.getElementById('kw-tags').innerHTML = '';
   document.getElementById('modal-add-biz').classList.add('open');
@@ -751,7 +760,8 @@ function renderKwTags() {
 async function submitAddBusiness() {
   const name = document.getElementById('biz-name').value.trim();
   const addr = document.getElementById('biz-addr').value.trim();
-  if (!name || !addr) { alert('Please fill in name and address'); return; }
+  if (!name) { alert('Please fill in business name'); return; }
+  if (!addr && !parsedCoords) { alert('Please provide an address or a Google Maps URL'); return; }
 
   const btn = document.querySelector('#modal-add-biz .btn-submit');
   btn.textContent = 'Geocoding…'; btn.disabled = true;

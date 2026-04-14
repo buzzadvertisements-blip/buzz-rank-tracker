@@ -47,16 +47,23 @@ def add_business():
     address = data.get('address', '').strip()
     keywords = [k.strip() for k in data.get('keywords', []) if k.strip()]
 
-    if not name or not address:
-        return jsonify({'error': 'שם וכתובת הם שדות חובה'}), 400
-
     # אם הועברו קורדינטות ישירות (מ-Maps URL)
     lat = data.get('lat')
     lng = data.get('lng')
-    if not lat:
+
+    if not name:
+        return jsonify({'error': 'שם הוא שדה חובה'}), 400
+
+    if lat and lng:
+        # יש קורדינטות מ-URL — כתובת לא חובה
+        if not address:
+            address = f'{float(lat):.4f}, {float(lng):.4f}'
+    else:
+        if not address:
+            return jsonify({'error': 'נדרשת כתובת או קישור Google Maps'}), 400
         lat, lng = geocode_address(address)
-    if not lat:
-        return jsonify({'error': f'לא נמצאה כתובת: {address}'}), 400
+        if not lat:
+            return jsonify({'error': f'לא נמצאה כתובת: {address}'}), 400
 
     db = get_db()
     cursor = db.execute(
