@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BUZZ Rank Tracker</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         background:#0f1117; color:#e2e8f0; height:100vh; display:flex; overflow:hidden; }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    width: 280px; min-width: 280px;
+    background: #1a1d2e;
+    display: flex; flex-direction: column;
+    border-right: 1px solid #2d3154;
+    z-index: 100;
+  }
+  #sidebar-header {
+    padding: 20px 16px 14px;
+    border-bottom: 1px solid #2d3154;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .logo {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 14px; color: white;
+  }
+  .logo-text { font-size: 16px; font-weight: 700; color: #e2e8f0; }
+  .logo-sub  { font-size: 11px; color: #64748b; }
+
+  #nav { padding: 8px; }
+  .nav-btn {
+    width: 100%; padding: 9px 12px; border-radius: 8px;
+    background: none; border: none; color: #94a3b8;
+    cursor: pointer; text-align: left; font-size: 13px;
+    display: flex; align-items: center; gap: 8px; transition: all .15s;
+    margin-bottom: 2px;
+  }
+  .nav-btn:hover { background: #252849; color: #e2e8f0; }
+  .nav-btn.active { background: #312e81; color: #a5b4fc; }
+  .nav-btn svg { width:16px; height:16px; flex-shrink:0; }
+
+  #btn-new-scan {
+    margin: 8px; padding: 10px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border: none; border-radius: 8px; color: white;
+    font-weight: 600; font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    transition: opacity .15s;
+  }
+  #btn-new-scan:hover { opacity: .85; }
+
+  #search-bar {
+    padding: 8px;
+    border-bottom: 1px solid #2d3154;
+  }
+  #search-bar input {
+    width: 100%; padding: 8px 12px; border-radius: 8px;
+    background: #252849; border: 1px solid #3d4172;
+    color: #e2e8f0; font-size: 13px; outline: none;
+  }
+  #search-bar input:focus { border-color: #6366f1; }
+
+  #business-list {
+    flex: 1; overflow-y: auto; padding: 4px 0;
+  }
+  .biz-item {
+    padding: 10px 16px; cursor: pointer; transition: background .1s;
+    border-left: 3px solid transparent;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .biz-item:hover { background: #252849; }
+  .biz-item.active { background: #252849; border-left-color: #6366f1; }
+  .biz-icon {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #312e81; display: flex; align-items: center;
+    justify-content: center; font-size: 12px; font-weight: 700;
+    color: #a5b4fc; flex-shrink: 0;
+  }
+  .biz-name { font-size: 13px; font-weight: 500; color: #e2e8f0;
+              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .biz-addr { font-size: 11px; color: #64748b; margin-top: 2px;
+              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── MAIN ── */
+  #main { flex: 1; display: flex; flex-direction: column; position: relative; }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    background: #1a1d2e; border-bottom: 1px solid #2d3154;
+    padding: 0 16px; height: 52px;
+    display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  }
+  #topbar h2 { font-size: 15px; font-weight: 600; color: #e2e8f0; flex: 1; }
+  .tb-btn {
+    padding: 6px 14px; border-radius: 6px; font-size: 12px;
+    font-weight: 600; cursor: pointer; border: none; transition: all .15s;
+  }
+  .tb-btn-primary {
+    background: #6366f1; color: white;
+  }
+  .tb-btn-primary:hover { background: #5254cc; }
+  .tb-btn-ghost {
+    background: #252849; color: #94a3b8; border: 1px solid #3d4172;
+  }
+  .tb-btn-ghost:hover { color: #e2e8f0; }
+
+  /* ── MAP ── */
+  #map { flex: 1; }
+  .leaflet-container { background: #1a1d2e; }
+
+  /* ── SCANS VIEW ── */
+  #scans-view {
+    flex: 1; overflow-y: auto; background: #0f1117;
+    padding: 20px;
+    display: none;
+  }
+  .scans-table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  .scans-table th {
+    text-align: left; padding: 10px 14px;
+    color: #64748b; font-weight: 500; font-size: 11px; text-transform: uppercase;
+    border-bottom: 1px solid #2d3154;
+  }
+  .scans-table td {
+    padding: 12px 14px; border-bottom: 1px solid #1e2235;
+    vertical-align: middle;
+  }
+  .scans-table tr:hover td { background: #1a1d2e; }
+  .badge {
+    display: inline-block; padding: 3px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600;
+  }
+  .badge-success { background: #14532d; color: #4ade80; }
+  .badge-running { background: #1e3a5f; color: #60a5fa; }
+  .badge-error   { background: #450a0a; color: #f87171; }
+  .rank-score {
+    font-weight: 700; font-size: 15px;
+  }
+  .btn-view {
+    padding: 5px 12px; background: #252849; border: 1px solid #3d4172;
+    border-radius: 6px; color: #94a3b8; cursor: pointer; font-size: 12px;
+  }
+  .btn-view:hover { color: #e2e8f0; background: #312e81; }
+
+  /* ── HEATMAP PANEL ── */
+  #heatmap-panel {
+    position: absolute; top: 52px; right: 0; bottom: 0;
+    width: 100%; display: flex; flex-direction: column; pointer-events: none;
+    z-index: 50;
+  }
+
+  /* ── SCAN INFO CARD ── */
+  #scan-info {
+    position: absolute; top: 62px; left: 10px;
+    background: #1a1d2e; border: 1px solid #2d3154;
+    border-radius: 12px; padding: 14px 16px; min-width: 220px;
+    z-index: 400; display: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,.4);
+  }
+  #scan-info h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .info-row { display: flex; justify-content: space-between;
+              font-size: 12px; margin-bottom: 4px; }
+  .info-label { color: #64748b; }
+  .info-val { color: #e2e8f0; font-weight: 500; }
+  .avg-score {
+    font-size: 28px; font-weight: 800; text-align: center;
+    margin: 10px 0 4px;
+  }
+  .avg-label { font-size: 11px; color: #64748b; text-align: center; }
+
+  /* ── LEGEND ── */
+  #legend {
+    position: absolute; bottom: 20px; left: 10px;
+    background: #1a1d2e; border: 1px solid #2d3154;
+    border-radius: 10px; padding: 10px 14px;
+    z-index: 400; font-size: 11px;
+  }
+  #legend h4 { color: #94a3b8; margin-bottom: 8px; font-weight: 500; }
+  .leg-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .leg-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── MODALS ── */
+  .modal-bg {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.7); z-index: 1000;
+    align-items: center; justify-content: center;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: #1a1d2e; border: 1px solid #2d3154;
+    border-radius: 16px; padding: 24px; width: 480px; max-width: 95vw;
+  }
+  .modal h2 { font-size: 16px; font-weight: 700; margin-bottom: 20px; }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 12px; color: #94a3b8;
+                      margin-bottom: 5px; font-weight: 500; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 9px 12px; border-radius: 8px;
+    background: #0f1117; border: 1px solid #3d4172;
+    color: #e2e8f0; font-size: 13px; outline: none;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: #6366f1; }
+  .form-row { display: flex; gap: 10px; }
+  .form-row .form-group { flex: 1; }
+  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  .btn-cancel { padding: 8px 18px; background: #252849; border: 1px solid #3d4172;
+               border-radius: 8px; color: #94a3b8; cursor: pointer; font-size: 13px; }
+  .btn-submit { padding: 8px 20px; background: #6366f1; border: none;
+               border-radius: 8px; color: white; cursor: pointer; font-size: 13px;
+               font-weight: 600; }
+  .btn-submit:hover { background: #5254cc; }
+  .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .tag {
+    background: #312e81; color: #a5b4fc; padding: 3px 10px;
+    border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 5px;
+  }
+  .tag button { background: none; border: none; color: #a5b4fc; cursor: pointer;
+               font-size: 14px; line-height: 1; padding: 0; }
+
+  /* ── PROGRESS ── */
+  #progress-bar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: #1a1d2e; border-top: 1px solid #2d3154;
+    padding: 10px 16px; z-index: 500; display: none;
+  }
+  .progress-label { font-size: 12px; color: #94a3b8; margin-bottom: 6px; }
+  .progress-track { height: 4px; background: #252849; border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #6366f1; border-radius: 2px; transition: width .3s; }
+
+  /* tooltip */
+  .leaflet-tooltip-pane .rank-tooltip {
+    background: #1a1d2e; border: 1px solid #3d4172; color: #e2e8f0;
+    border-radius: 6px; font-size: 12px; font-weight: 600; padding: 4px 8px;
+    box-shadow: none;
+  }
+  #no-biz { text-align:center; padding:60px 20px; color:#64748b; }
+  #no-biz h3 { font-size:15px; margin-bottom:8px; }
+  .spinner { display:inline-block; width:14px; height:14px; border:2px solid #3d4172;
+            border-top-color:#6366f1; border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════
+     SIDEBAR
+════════════════════════════════════════════════ -->
+<div id="sidebar">
+  <div id="sidebar-header">
+    <div class="logo">B</div>
+    <div>
+      <div class="logo-text">BUZZ Tracker</div>
+      <div class="logo-sub">Local Rank Tracker</div>
+    </div>
+  </div>
+
+  <button id="btn-new-scan" onclick="openNewScanModal()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px">
+      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+    </svg>
+    New Scan
+  </button>
+
+  <div id="nav">
+    <button class="nav-btn active" id="nav-map" onclick="showView('map')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+      </svg>
+      Map View
+    </button>
+    <button class="nav-btn" id="nav-scans" onclick="showView('scans')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+      </svg>
+      My Scans
+    </button>
+    <button class="nav-btn" id="nav-add" onclick="openAddBusinessModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 5v14M5 12h14"/>
+      </svg>
+      Add Business
+    </button>
+  </div>
+
+  <div id="search-bar">
+    <input type="text" placeholder="Search businesses…" oninput="filterBusinesses(this.value)" />
+  </div>
+
+  <div id="business-list">
+    <div id="no-biz">
+      <h3>No businesses yet</h3>
+      <p style="font-size:12px">Click "Add Business" to get started</p>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     MAIN AREA
+════════════════════════════════════════════════ -->
+<div id="main">
+  <div id="topbar">
+    <h2 id="topbar-title">Select a business to start scanning</h2>
+    <button class="tb-btn tb-btn-ghost" onclick="openNewScanModal()" id="btn-scan-now" style="display:none">
+      ▶ Scan Now
+    </button>
+    <button class="tb-btn tb-btn-ghost" onclick="openAddBusinessModal()">+ Add Business</button>
+  </div>
+
+  <!-- Map -->
+  <div id="map"></div>
+
+  <!-- Scans Table -->
+  <div id="scans-view">
+    <table class="scans-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Business</th>
+          <th>Keyword</th>
+          <th>Avg Rank</th>
+          <th>Grid</th>
+          <th>Status</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="scans-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Scan info card -->
+  <div id="scan-info">
+    <h3 id="si-business">—</h3>
+    <div class="info-row"><span class="info-label">Keyword</span><span class="info-val" id="si-keyword">—</span></div>
+    <div class="info-row"><span class="info-label">Grid</span><span class="info-val" id="si-grid">—</span></div>
+    <div class="info-row"><span class="info-label">Date</span><span class="info-val" id="si-date">—</span></div>
+    <div class="avg-score" id="si-score">—</div>
+    <div class="avg-label">Average Rank (lower = better)</div>
+  </div>
+
+  <!-- Legend -->
+  <div id="legend">
+    <h4>Rank Legend</h4>
+    <div class="leg-row"><div class="leg-dot" style="background:#1a9c3e"></div><span>#1–3 Top</span></div>
+    <div class="leg-row"><div class="leg-dot" style="background:#5cb85c"></div><span>#4–7 Good</span></div>
+    <div class="leg-row"><div class="leg-dot" style="background:#f0ad4e"></div><span>#8–10 OK</span></div>
+    <div class="leg-row"><div class="leg-dot" style="background:#e67e22"></div><span>#11–14 Weak</span></div>
+    <div class="leg-row"><div class="leg-dot" style="background:#e74c3c"></div><span>#15–17 Poor</span></div>
+    <div class="leg-row"><div class="leg-dot" style="background:#8e1a0e"></div><span>#18–20 Not found</span></div>
+  </div>
+
+  <!-- Progress bar -->
+  <div id="progress-bar">
+    <div class="progress-label" id="progress-label">Scanning…</div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     MODAL: ADD BUSINESS
+════════════════════════════════════════════════ -->
+<div class="modal-bg" id="modal-add-biz">
+  <div class="modal">
+    <h2>➕ Add Business</h2>
+    <div class="form-group">
+      <label>🗺️ Google Maps URL (אופציונלי)</label>
+      <input type="text" id="biz-maps-url" placeholder="https://share.google/... או google.com/maps/..."
+             oninput="debounceUrl(this.value)" />
+      <div id="maps-url-status" style="font-size:11px;margin-top:4px;color:#64748b"></div>
+    </div>
+    <div class="form-group">
+      <label>Business Name</label>
+      <input type="text" id="biz-name" placeholder="e.g. Precision Air Care" />
+    </div>
+    <div class="form-group">
+      <label>Address (אם אין Maps URL)</label>
+      <input type="text" id="biz-addr" placeholder="102 W 3rd St, Winston-Salem, NC 27101" />
+    </div>
+    <div class="form-group">
+      <label>Keywords (press Enter to add)</label>
+      <input type="text" id="kw-input" placeholder="air duct cleaning near me"
+             onkeydown="addKeywordTag(event)" />
+      <div class="tag-list" id="kw-tags"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('modal-add-biz')">Cancel</button>
+      <button class="btn-submit" onclick="submitAddBusiness()">Add Business</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     MODAL: NEW SCAN
+════════════════════════════════════════════════ -->
+<div class="modal-bg" id="modal-new-scan">
+  <div class="modal">
+    <h2>🔍 New Scan</h2>
+    <div class="form-group">
+      <label>Business</label>
+      <select id="scan-biz-sel"></select>
+    </div>
+    <div class="form-group">
+      <label>Keyword</label>
+      <input type="text" id="scan-keyword" placeholder="air duct cleaning near me" />
+      <div class="tag-list" id="suggested-kws" style="margin-top:6px"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Grid Size</label>
+        <select id="scan-grid">
+          <option value="5">5×5 (25 pts)</option>
+          <option value="7" selected>7×7 (49 pts)</option>
+          <option value="9">9×9 (81 pts)</option>
+          <option value="11">11×11 (121 pts)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Spacing</label>
+        <select id="scan-spacing">
+          <option value="0.5">500 m</option>
+          <option value="1" selected>1 km</option>
+          <option value="2.5">2.5 km</option>
+          <option value="5">5 km</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('modal-new-scan')">Cancel</button>
+      <button class="btn-submit" onclick="submitNewScan()">Start Scan ▶</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════ -->
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let map, businesses = [], activeBizId = null, currentScanId = null;
+let scanMarkers = [], pollInterval = null, keywords = [];
+
+// ── Map Init ───────────────────────────────────────────────────────────────────
+map = L.map('map', { zoomControl: true }).setView([37.5, -96], 4);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors',
+  className: 'map-tiles'
+}).addTo(map);
+
+// ── Rank Colors ────────────────────────────────────────────────────────────────
+function rankColor(rank) {
+  if (rank <= 3)  return '#1a9c3e';
+  if (rank <= 7)  return '#5cb85c';
+  if (rank <= 10) return '#f0ad4e';
+  if (rank <= 14) return '#e67e22';
+  if (rank <= 17) return '#e74c3c';
+  return '#8e1a0e';
+}
+
+// ── Load Businesses ────────────────────────────────────────────────────────────
+async function loadBusinesses() {
+  const r = await fetch('/api/businesses');
+  businesses = await r.json();
+  renderBusinessList();
+}
+
+function renderBusinessList(filter = '') {
+  const list = document.getElementById('business-list');
+  const f = filter.toLowerCase();
+  const filtered = businesses.filter(b =>
+    b.name.toLowerCase().includes(f) || b.address.toLowerCase().includes(f)
+  );
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div id="no-biz"><h3>${businesses.length ? 'No results' : 'No businesses yet'}</h3>
+      <p style="font-size:12px">Click "Add Business" to get started</p></div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(b => `
+    <div class="biz-item ${b.id === activeBizId ? 'active' : ''}" onclick="selectBusiness(${b.id})">
+      <div class="biz-icon">${b.name.charAt(0)}</div>
+      <div style="overflow:hidden">
+        <div class="biz-name">${b.name}</div>
+        <div class="biz-addr">${b.address}</div>
+      </div>
+    </div>`).join('');
+}
+
+function filterBusinesses(val) { renderBusinessList(val); }
+
+// ── Select Business ────────────────────────────────────────────────────────────
+async function selectBusiness(id) {
+  activeBizId = id;
+  renderBusinessList();
+  const biz = businesses.find(b => b.id === id);
+  document.getElementById('topbar-title').textContent = biz.name;
+  document.getElementById('btn-scan-now').style.display = 'inline-block';
+  showView('map');
+
+  // מרכז המפה על העסק
+  map.setView([biz.lat, biz.lng], 12);
+
+  // הצג את הסריקה האחרונה אם קיימת
+  const r = await fetch(`/api/scans?business_id=${id}`);
+  const scans = await r.json();
+  if (scans.length > 0) {
+    loadScanHeatmap(scans[0].id);
+  } else {
+    clearHeatmap();
+    document.getElementById('scan-info').style.display = 'none';
+  }
+}
+
+// ── Views ──────────────────────────────────────────────────────────────────────
+function showView(view) {
+  document.getElementById('map').style.display      = view === 'map'   ? 'block' : 'none';
+  document.getElementById('scans-view').style.display = view === 'scans' ? 'block' : 'none';
+  document.getElementById('scan-info').style.display  = view === 'map'   ? '' : 'none';
+  document.getElementById('legend').style.display     = view === 'map'   ? '' : 'none';
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`nav-${view === 'scans' ? 'scans' : 'map'}`).classList.add('active');
+
+  if (view === 'scans') loadScansTable();
+  if (view === 'map') setTimeout(() => map.invalidateSize(), 50);
+}
+
+// ── Scans Table ────────────────────────────────────────────────────────────────
+async function loadScansTable() {
+  const r = await fetch('/api/scans');
+  const scans = await r.json();
+  const tbody = document.getElementById('scans-tbody');
+  if (scans.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#64748b">No scans yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = scans.map((s, i) => {
+    const running = s.status.startsWith('running');
+    const badge = running
+      ? `<span class="badge badge-running"><span class="spinner"></span> Running</span>`
+      : s.status === 'done' ? `<span class="badge badge-success">✓ Done</span>`
+      : `<span class="badge badge-error">Error</span>`;
+    const scoreColor = s.avg_rank ? rankColor(s.avg_rank) : '#64748b';
+    return `<tr>
+      <td style="color:#64748b">${i+1}</td>
+      <td>${s.business_name}</td>
+      <td style="color:#a5b4fc">${s.keyword}</td>
+      <td><span class="rank-score" style="color:${scoreColor}">${s.avg_rank || '—'}</span></td>
+      <td style="color:#64748b">${s.grid_size}×${s.grid_size} · ${s.spacing_km}km</td>
+      <td>${badge}</td>
+      <td style="color:#64748b;font-size:11px">${s.created_at ? s.created_at.slice(0,16) : '—'}</td>
+      <td>
+        <button class="btn-view" onclick="viewScan(${s.id})">View Map</button>
+        <button class="btn-view" style="margin-left:4px;color:#ef4444" onclick="deleteScan(${s.id})">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function viewScan(scanId) {
+  showView('map');
+  await loadScanHeatmap(scanId);
+}
+
+async function deleteScan(scanId) {
+  if (!confirm('Delete this scan?')) return;
+  await fetch(`/api/scans/${scanId}`, { method: 'DELETE' });
+  loadScansTable();
+}
+
+// ── Heatmap ────────────────────────────────────────────────────────────────────
+function clearHeatmap() {
+  scanMarkers.forEach(m => map.removeLayer(m));
+  scanMarkers = [];
+}
+
+async function loadScanHeatmap(scanId) {
+  clearHeatmap();
+  currentScanId = scanId;
+
+  const [scanR, resultsR] = await Promise.all([
+    fetch(`/api/scans/${scanId}`),
+    fetch(`/api/scans/${scanId}/results`)
+  ]);
+  const scan = await scanR.json();
+  const results = await resultsR.json();
+
+  // עדכן info card
+  const si = document.getElementById('scan-info');
+  si.style.display = 'block';
+  document.getElementById('si-business').textContent = scan.business_name;
+  document.getElementById('si-keyword').textContent  = scan.keyword;
+  document.getElementById('si-grid').textContent     = `${scan.grid_size}×${scan.grid_size} · ${scan.spacing_km}km`;
+  document.getElementById('si-date').textContent     = scan.created_at ? scan.created_at.slice(0,16) : '—';
+  const scoreEl = document.getElementById('si-score');
+  if (scan.avg_rank) {
+    scoreEl.textContent = scan.avg_rank;
+    scoreEl.style.color = rankColor(scan.avg_rank);
+  } else {
+    scoreEl.textContent = '…';
+    scoreEl.style.color = '#64748b';
+  }
+
+  // ציור נקודות על המפה
+  results.forEach(pt => {
+    const color = rankColor(pt.rank);
+    const m = L.circleMarker([pt.lat, pt.lng], {
+      radius: 18,
+      fillColor: color,
+      fillOpacity: 0.85,
+      color: 'rgba(0,0,0,0.3)',
+      weight: 1
+    }).addTo(map);
+
+    // מספר בתוך העיגול
+    const icon = L.divIcon({
+      html: `<div style="color:white;font-weight:700;font-size:11px;text-align:center;
+                          line-height:22px;width:22px;pointer-events:none">
+               ${pt.rank === 20 ? '—' : pt.rank}
+             </div>`,
+      className: '',
+      iconSize: [22, 22],
+      iconAnchor: [11, 11]
+    });
+    const label = L.marker([pt.lat, pt.lng], { icon, interactive: false }).addTo(map);
+
+    m.bindTooltip(`Rank #${pt.rank === 20 ? 'Not found' : pt.rank}`, {
+      className: 'rank-tooltip', direction: 'top'
+    });
+
+    scanMarkers.push(m, label);
+  });
+
+  // אם עדיין רץ - poll
+  if (scan.status.startsWith('running')) {
+    startPolling(scanId);
+  }
+}
+
+// ── Polling ────────────────────────────────────────────────────────────────────
+function startPolling(scanId) {
+  if (pollInterval) clearInterval(pollInterval);
+  document.getElementById('progress-bar').style.display = 'block';
+
+  pollInterval = setInterval(async () => {
+    const r = await fetch(`/api/scans/${scanId}`);
+    const scan = await r.json();
+
+    // עדכן progress
+    if (scan.status.startsWith('running:')) {
+      const parts = scan.status.split(':')[1].split('/');
+      const done = parseInt(parts[0]), total = parseInt(parts[1]);
+      const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('progress-label').textContent =
+        `Scanning… ${done}/${total} points completed`;
+    }
+
+    if (scan.status === 'done' || scan.status === 'error') {
+      clearInterval(pollInterval);
+      pollInterval = null;
+      document.getElementById('progress-bar').style.display = 'none';
+      loadScanHeatmap(scanId);
+    } else {
+      // טען נקודות חדשות שהתווספו
+      await loadScanHeatmap(scanId);
+    }
+  }, 8000);
+}
+
+// ── Add Business Modal ─────────────────────────────────────────────────────────
+// ── Maps URL Parser ───────────────────────────────────────────────────────────
+let urlDebounceTimer = null;
+let parsedCoords = null;
+
+function debounceUrl(val) {
+  clearTimeout(urlDebounceTimer);
+  if (!val.trim()) { document.getElementById('maps-url-status').textContent = ''; parsedCoords = null; return; }
+  document.getElementById('maps-url-status').textContent = '🔍 מחפש קורדינטות...';
+  urlDebounceTimer = setTimeout(() => parseMapsUrl(val), 800);
+}
+
+async function parseMapsUrl(url) {
+  if (!url.trim()) return;
+  try {
+    const r = await fetch('/api/parse-maps-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    const data = await r.json();
+    const status = document.getElementById('maps-url-status');
+    if (data.lat) {
+      parsedCoords = { lat: data.lat, lng: data.lng };
+      status.textContent = '✅ נמצא: ' + data.lat.toFixed(4) + ', ' + data.lng.toFixed(4);
+      status.style.color = '#4ade80';
+      if (data.name && !document.getElementById('biz-name').value) {
+        document.getElementById('biz-name').value = data.name;
+      }
+    } else {
+      parsedCoords = null;
+      status.textContent = '⚠️ ' + (data.error || 'לא נמצאו קורדינטות');
+      status.style.color = '#f87171';
+    }
+  } catch(e) {
+    parsedCoords = null;
+    document.getElementById('maps-url-status').textContent = '❌ שגיאה: ' + e.message;
+  }
+}
+
+function openAddBusinessModal() {
+  keywords = [];
+  parsedCoords = null;
+  document.getElementById('biz-maps-url').value = '';
+  document.getElementById('maps-url-status').textContent = '';
+  document.getElementById('biz-name').value = '';
+  document.getElementById('biz-addr').value = '';
+  document.getElementById('kw-input').value = '';
+  document.getElementById('kw-tags').innerHTML = '';
+  document.getElementById('modal-add-biz').classList.add('open');
+}
+
+function addKeywordTag(e) {
+  if (e.key !== 'Enter') return;
+  const val = e.target.value.trim();
+  if (!val) return;
+  keywords.push(val);
+  e.target.value = '';
+  renderKwTags();
+}
+
+function removeKeyword(i) {
+  keywords.splice(i, 1);
+  renderKwTags();
+}
+
+function renderKwTags() {
+  document.getElementById('kw-tags').innerHTML = keywords.map((k, i) =>
+    `<span class="tag">${k}<button onclick="removeKeyword(${i})">×</button></span>`
+  ).join('');
+}
+
+async function submitAddBusiness() {
+  const name = document.getElementById('biz-name').value.trim();
+  const addr = document.getElementById('biz-addr').value.trim();
+  if (!name || !addr) { alert('Please fill in name and address'); return; }
+
+  const btn = document.querySelector('#modal-add-biz .btn-submit');
+  btn.textContent = 'Geocoding…'; btn.disabled = true;
+
+  const payload = { name, address: addr, keywords };
+  if (parsedCoords) { payload.lat = parsedCoords.lat; payload.lng = parsedCoords.lng; }
+  const r = await fetch('/api/businesses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await r.json();
+  btn.textContent = 'Add Business'; btn.disabled = false;
+
+  if (data.error) { alert(data.error); return; }
+  closeModal('modal-add-biz');
+  await loadBusinesses();
+  selectBusiness(data.id);
+}
+
+// ── New Scan Modal ─────────────────────────────────────────────────────────────
+function openNewScanModal() {
+  // מלא את רשימת העסקים
+  const sel = document.getElementById('scan-biz-sel');
+  sel.innerHTML = businesses.map(b =>
+    `<option value="${b.id}" ${b.id === activeBizId ? 'selected' : ''}>${b.name}</option>`
+  ).join('');
+
+  // הצג מילות מפתח מוצעות
+  updateSuggestedKws();
+  sel.onchange = updateSuggestedKws;
+  document.getElementById('scan-keyword').value = '';
+  document.getElementById('modal-new-scan').classList.add('open');
+}
+
+function updateSuggestedKws() {
+  const sel = document.getElementById('scan-biz-sel');
+  const biz = businesses.find(b => b.id == sel.value);
+  const container = document.getElementById('suggested-kws');
+  if (!biz || !biz.keywords || biz.keywords.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = biz.keywords.map(k =>
+    `<span class="tag" style="cursor:pointer" onclick="document.getElementById('scan-keyword').value='${k}'">${k}</span>`
+  ).join('');
+}
+
+async function submitNewScan() {
+  const bizId = parseInt(document.getElementById('scan-biz-sel').value);
+  const keyword = document.getElementById('scan-keyword').value.trim();
+  const gridSize = parseInt(document.getElementById('scan-grid').value);
+  const spacing = parseFloat(document.getElementById('scan-spacing').value);
+
+  if (!keyword) { alert('Please enter a keyword'); return; }
+
+  const btn = document.querySelector('#modal-new-scan .btn-submit');
+  btn.textContent = 'Starting…'; btn.disabled = true;
+
+  const r = await fetch('/api/scans', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ business_id: bizId, keyword, grid_size: gridSize, spacing_km: spacing })
+  });
+  const data = await r.json();
+  btn.textContent = 'Start Scan ▶'; btn.disabled = false;
+
+  if (data.error) { alert(data.error); return; }
+
+  closeModal('modal-new-scan');
+  showView('map');
+  activeBizId = bizId;
+  renderBusinessList();
+
+  const biz = businesses.find(b => b.id === bizId);
+  if (biz) {
+    document.getElementById('topbar-title').textContent = biz.name;
+    map.setView([biz.lat, biz.lng], 12);
+  }
+
+  // התחל לעקוב אחרי הסריקה
+  startPolling(data.scan_id);
+  loadScanHeatmap(data.scan_id);
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+// סגור modal בלחיצה מחוצה
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('open'); });
+});
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+loadBusinesses();
+</script>
+</body>
+</html>
