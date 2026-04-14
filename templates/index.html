@@ -1,872 +1,244 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BUZZ Rank Tracker</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<title>BUZZ תכנון פיננסי</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-         background:#0f1117; color:#e2e8f0; height:100vh; display:flex; overflow:hidden; }
-
-  /* ── SIDEBAR ── */
-  #sidebar {
-    width: 280px; min-width: 280px;
-    background: #1a1d2e;
-    display: flex; flex-direction: column;
-    border-right: 1px solid #2d3154;
-    z-index: 100;
-  }
-  #sidebar-header {
-    padding: 20px 16px 14px;
-    border-bottom: 1px solid #2d3154;
-    display: flex; align-items: center; gap: 10px;
-  }
-  .logo {
-    width: 32px; height: 32px; border-radius: 8px;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 14px; color: white;
-  }
-  .logo-text { font-size: 16px; font-weight: 700; color: #e2e8f0; }
-  .logo-sub  { font-size: 11px; color: #64748b; }
-
-  #nav { padding: 8px; }
-  .nav-btn {
-    width: 100%; padding: 9px 12px; border-radius: 8px;
-    background: none; border: none; color: #94a3b8;
-    cursor: pointer; text-align: left; font-size: 13px;
-    display: flex; align-items: center; gap: 8px; transition: all .15s;
-    margin-bottom: 2px;
-  }
-  .nav-btn:hover { background: #252849; color: #e2e8f0; }
-  .nav-btn.active { background: #312e81; color: #a5b4fc; }
-  .nav-btn svg { width:16px; height:16px; flex-shrink:0; }
-
-  #btn-new-scan {
-    margin: 8px; padding: 10px;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    border: none; border-radius: 8px; color: white;
-    font-weight: 600; font-size: 13px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; gap: 6px;
-    transition: opacity .15s;
-  }
-  #btn-new-scan:hover { opacity: .85; }
-
-  #search-bar {
-    padding: 8px;
-    border-bottom: 1px solid #2d3154;
-  }
-  #search-bar input {
-    width: 100%; padding: 8px 12px; border-radius: 8px;
-    background: #252849; border: 1px solid #3d4172;
-    color: #e2e8f0; font-size: 13px; outline: none;
-  }
-  #search-bar input:focus { border-color: #6366f1; }
-
-  #business-list {
-    flex: 1; overflow-y: auto; padding: 4px 0;
-  }
-  .biz-item {
-    padding: 10px 16px; cursor: pointer; transition: background .1s;
-    border-left: 3px solid transparent;
-    display: flex; align-items: center; gap: 10px;
-  }
-  .biz-item:hover { background: #252849; }
-  .biz-item.active { background: #252849; border-left-color: #6366f1; }
-  .biz-icon {
-    width: 32px; height: 32px; border-radius: 50%;
-    background: #312e81; display: flex; align-items: center;
-    justify-content: center; font-size: 12px; font-weight: 700;
-    color: #a5b4fc; flex-shrink: 0;
-  }
-  .biz-name { font-size: 13px; font-weight: 500; color: #e2e8f0;
-              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .biz-addr { font-size: 11px; color: #64748b; margin-top: 2px;
-              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-  /* ── MAIN ── */
-  #main { flex: 1; display: flex; flex-direction: column; position: relative; }
-
-  /* ── TOP BAR ── */
-  #topbar {
-    background: #1a1d2e; border-bottom: 1px solid #2d3154;
-    padding: 0 16px; height: 52px;
-    display: flex; align-items: center; gap: 12px; flex-shrink: 0;
-  }
-  #topbar h2 { font-size: 15px; font-weight: 600; color: #e2e8f0; flex: 1; }
-  .tb-btn {
-    padding: 6px 14px; border-radius: 6px; font-size: 12px;
-    font-weight: 600; cursor: pointer; border: none; transition: all .15s;
-  }
-  .tb-btn-primary {
-    background: #6366f1; color: white;
-  }
-  .tb-btn-primary:hover { background: #5254cc; }
-  .tb-btn-ghost {
-    background: #252849; color: #94a3b8; border: 1px solid #3d4172;
-  }
-  .tb-btn-ghost:hover { color: #e2e8f0; }
-
-  /* ── MAP ── */
-  #map { flex: 1; }
-  .leaflet-container { background: #1a1d2e; }
-
-  /* ── SCANS VIEW ── */
-  #scans-view {
-    flex: 1; overflow-y: auto; background: #0f1117;
-    padding: 20px;
-    display: none;
-  }
-  .scans-table {
-    width: 100%; border-collapse: collapse; font-size: 13px;
-  }
-  .scans-table th {
-    text-align: left; padding: 10px 14px;
-    color: #64748b; font-weight: 500; font-size: 11px; text-transform: uppercase;
-    border-bottom: 1px solid #2d3154;
-  }
-  .scans-table td {
-    padding: 12px 14px; border-bottom: 1px solid #1e2235;
-    vertical-align: middle;
-  }
-  .scans-table tr:hover td { background: #1a1d2e; }
-  .badge {
-    display: inline-block; padding: 3px 8px; border-radius: 4px;
-    font-size: 11px; font-weight: 600;
-  }
-  .badge-success { background: #14532d; color: #4ade80; }
-  .badge-running { background: #1e3a5f; color: #60a5fa; }
-  .badge-error   { background: #450a0a; color: #f87171; }
-  .rank-score {
-    font-weight: 700; font-size: 15px;
-  }
-  .btn-view {
-    padding: 5px 12px; background: #252849; border: 1px solid #3d4172;
-    border-radius: 6px; color: #94a3b8; cursor: pointer; font-size: 12px;
-  }
-  .btn-view:hover { color: #e2e8f0; background: #312e81; }
-
-  /* ── HEATMAP PANEL ── */
-  #heatmap-panel {
-    position: absolute; top: 52px; right: 0; bottom: 0;
-    width: 100%; display: flex; flex-direction: column; pointer-events: none;
-    z-index: 50;
-  }
-
-  /* ── SCAN INFO CARD ── */
-  #scan-info {
-    position: absolute; top: 62px; left: 10px;
-    background: #1a1d2e; border: 1px solid #2d3154;
-    border-radius: 12px; padding: 14px 16px; min-width: 220px;
-    z-index: 400; display: none;
-    box-shadow: 0 4px 20px rgba(0,0,0,.4);
-  }
-  #scan-info h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
-  .info-row { display: flex; justify-content: space-between;
-              font-size: 12px; margin-bottom: 4px; }
-  .info-label { color: #64748b; }
-  .info-val { color: #e2e8f0; font-weight: 500; }
-  .avg-score {
-    font-size: 28px; font-weight: 800; text-align: center;
-    margin: 10px 0 4px;
-  }
-  .avg-label { font-size: 11px; color: #64748b; text-align: center; }
-
-  /* ── LEGEND ── */
-  #legend {
-    position: absolute; bottom: 20px; left: 10px;
-    background: #1a1d2e; border: 1px solid #2d3154;
-    border-radius: 10px; padding: 10px 14px;
-    z-index: 400; font-size: 11px;
-  }
-  #legend h4 { color: #94a3b8; margin-bottom: 8px; font-weight: 500; }
-  .leg-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-  .leg-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-
-  /* ── MODALS ── */
-  .modal-bg {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,.7); z-index: 1000;
-    align-items: center; justify-content: center;
-  }
-  .modal-bg.open { display: flex; }
-  .modal {
-    background: #1a1d2e; border: 1px solid #2d3154;
-    border-radius: 16px; padding: 24px; width: 480px; max-width: 95vw;
-  }
-  .modal h2 { font-size: 16px; font-weight: 700; margin-bottom: 20px; }
-  .form-group { margin-bottom: 14px; }
-  .form-group label { display: block; font-size: 12px; color: #94a3b8;
-                      margin-bottom: 5px; font-weight: 500; }
-  .form-group input, .form-group select, .form-group textarea {
-    width: 100%; padding: 9px 12px; border-radius: 8px;
-    background: #0f1117; border: 1px solid #3d4172;
-    color: #e2e8f0; font-size: 13px; outline: none;
-  }
-  .form-group input:focus, .form-group select:focus { border-color: #6366f1; }
-  .form-row { display: flex; gap: 10px; }
-  .form-row .form-group { flex: 1; }
-  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
-  .btn-cancel { padding: 8px 18px; background: #252849; border: 1px solid #3d4172;
-               border-radius: 8px; color: #94a3b8; cursor: pointer; font-size: 13px; }
-  .btn-submit { padding: 8px 20px; background: #6366f1; border: none;
-               border-radius: 8px; color: white; cursor: pointer; font-size: 13px;
-               font-weight: 600; }
-  .btn-submit:hover { background: #5254cc; }
-  .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .tag {
-    background: #312e81; color: #a5b4fc; padding: 3px 10px;
-    border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 5px;
-  }
-  .tag button { background: none; border: none; color: #a5b4fc; cursor: pointer;
-               font-size: 14px; line-height: 1; padding: 0; }
-
-  /* ── PROGRESS ── */
-  #progress-bar {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    background: #1a1d2e; border-top: 1px solid #2d3154;
-    padding: 10px 16px; z-index: 500; display: none;
-  }
-  .progress-label { font-size: 12px; color: #94a3b8; margin-bottom: 6px; }
-  .progress-track { height: 4px; background: #252849; border-radius: 2px; overflow: hidden; }
-  .progress-fill { height: 100%; background: #6366f1; border-radius: 2px; transition: width .3s; }
-
-  /* tooltip */
-  .leaflet-tooltip-pane .rank-tooltip {
-    background: #1a1d2e; border: 1px solid #3d4172; color: #e2e8f0;
-    border-radius: 6px; font-size: 12px; font-weight: 600; padding: 4px 8px;
-    box-shadow: none;
-  }
-  #no-biz { text-align:center; padding:60px 20px; color:#64748b; }
-  #no-biz h3 { font-size:15px; margin-bottom:8px; }
-  .spinner { display:inline-block; width:14px; height:14px; border:2px solid #3d4172;
-            border-top-color:#6366f1; border-radius:50%; animation:spin .8s linear infinite; }
-  @keyframes spin { to { transform:rotate(360deg); } }
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f0f2f5;font-family:'Segoe UI','Noto Sans Hebrew',system-ui,sans-serif;color:#1a1d23;direction:rtl}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#f0f2f5}::-webkit-scrollbar-thumb{background:#c0c5d0;border-radius:3px}
 </style>
 </head>
 <body>
-
-<!-- ════════════════════════════════════════════════
-     SIDEBAR
-════════════════════════════════════════════════ -->
-<div id="sidebar">
-  <div id="sidebar-header">
-    <div class="logo">B</div>
-    <div>
-      <div class="logo-text">BUZZ Tracker</div>
-      <div class="logo-sub">Local Rank Tracker</div>
-    </div>
-  </div>
-
-  <button id="btn-new-scan" onclick="openNewScanModal()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px">
-      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-    </svg>
-    New Scan
-  </button>
-
-  <div id="nav">
-    <button class="nav-btn active" id="nav-map" onclick="showView('map')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
-      </svg>
-      Map View
-    </button>
-    <button class="nav-btn" id="nav-scans" onclick="showView('scans')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
-      </svg>
-      My Scans
-    </button>
-    <button class="nav-btn" id="nav-add" onclick="openAddBusinessModal()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 5v14M5 12h14"/>
-      </svg>
-      Add Business
-    </button>
-  </div>
-
-  <div id="search-bar">
-    <input type="text" placeholder="Search businesses…" oninput="filterBusinesses(this.value)" />
-  </div>
-
-  <div id="business-list">
-    <div id="no-biz">
-      <h3>No businesses yet</h3>
-      <p style="font-size:12px">Click "Add Business" to get started</p>
-    </div>
-  </div>
-</div>
-
-<!-- ════════════════════════════════════════════════
-     MAIN AREA
-════════════════════════════════════════════════ -->
-<div id="main">
-  <div id="topbar">
-    <h2 id="topbar-title">Select a business to start scanning</h2>
-    <button class="tb-btn tb-btn-ghost" onclick="openNewScanModal()" id="btn-scan-now" style="display:none">
-      ▶ Scan Now
-    </button>
-    <button class="tb-btn tb-btn-ghost" onclick="openAddBusinessModal()">+ Add Business</button>
-  </div>
-
-  <!-- Map -->
-  <div id="map"></div>
-
-  <!-- Scans Table -->
-  <div id="scans-view">
-    <table class="scans-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Business</th>
-          <th>Keyword</th>
-          <th>Avg Rank</th>
-          <th>Grid</th>
-          <th>Status</th>
-          <th>Date</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="scans-tbody"></tbody>
-    </table>
-  </div>
-
-  <!-- Scan info card -->
-  <div id="scan-info">
-    <h3 id="si-business">—</h3>
-    <div class="info-row"><span class="info-label">Keyword</span><span class="info-val" id="si-keyword">—</span></div>
-    <div class="info-row"><span class="info-label">Grid</span><span class="info-val" id="si-grid">—</span></div>
-    <div class="info-row"><span class="info-label">Date</span><span class="info-val" id="si-date">—</span></div>
-    <div class="avg-score" id="si-score">—</div>
-    <div class="avg-label">Average Rank (lower = better)</div>
-  </div>
-
-  <!-- Legend -->
-  <div id="legend">
-    <h4>Rank Legend</h4>
-    <div class="leg-row"><div class="leg-dot" style="background:#1a9c3e"></div><span>#1–3 Top</span></div>
-    <div class="leg-row"><div class="leg-dot" style="background:#5cb85c"></div><span>#4–7 Good</span></div>
-    <div class="leg-row"><div class="leg-dot" style="background:#f0ad4e"></div><span>#8–10 OK</span></div>
-    <div class="leg-row"><div class="leg-dot" style="background:#e67e22"></div><span>#11–14 Weak</span></div>
-    <div class="leg-row"><div class="leg-dot" style="background:#e74c3c"></div><span>#15–17 Poor</span></div>
-    <div class="leg-row"><div class="leg-dot" style="background:#8e1a0e"></div><span>#18–20 Not found</span></div>
-  </div>
-
-  <!-- Progress bar -->
-  <div id="progress-bar">
-    <div class="progress-label" id="progress-label">Scanning…</div>
-    <div class="progress-track">
-      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ════════════════════════════════════════════════
-     MODAL: ADD BUSINESS
-════════════════════════════════════════════════ -->
-<div class="modal-bg" id="modal-add-biz">
-  <div class="modal">
-    <h2>➕ Add Business</h2>
-    <div class="form-group">
-      <label>🗺️ Google Maps URL (אופציונלי)</label>
-      <input type="text" id="biz-maps-url" placeholder="https://share.google/... או google.com/maps/..."
-             oninput="debounceUrl(this.value)" />
-      <div id="maps-url-status" style="font-size:11px;margin-top:4px;color:#64748b"></div>
-    </div>
-    <div class="form-group">
-      <label>Business Name</label>
-      <input type="text" id="biz-name" placeholder="e.g. Precision Air Care" />
-    </div>
-    <div class="form-group">
-      <label>Address (אם אין Maps URL)</label>
-      <input type="text" id="biz-addr" placeholder="102 W 3rd St, Winston-Salem, NC 27101" />
-    </div>
-    <div class="form-group">
-      <label>Keywords (press Enter to add)</label>
-      <input type="text" id="kw-input" placeholder="air duct cleaning near me"
-             onkeydown="addKeywordTag(event)" />
-      <div class="tag-list" id="kw-tags"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-cancel" onclick="closeModal('modal-add-biz')">Cancel</button>
-      <button class="btn-submit" onclick="submitAddBusiness()">Add Business</button>
-    </div>
-  </div>
-</div>
-
-<!-- ════════════════════════════════════════════════
-     MODAL: NEW SCAN
-════════════════════════════════════════════════ -->
-<div class="modal-bg" id="modal-new-scan">
-  <div class="modal">
-    <h2>🔍 New Scan</h2>
-    <div class="form-group">
-      <label>Business</label>
-      <select id="scan-biz-sel"></select>
-    </div>
-    <div class="form-group">
-      <label>Keyword</label>
-      <input type="text" id="scan-keyword" placeholder="air duct cleaning near me" />
-      <div class="tag-list" id="suggested-kws" style="margin-top:6px"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label>Grid Size</label>
-        <select id="scan-grid">
-          <option value="5">5×5 (25 pts)</option>
-          <option value="7" selected>7×7 (49 pts)</option>
-          <option value="9">9×9 (81 pts)</option>
-          <option value="11">11×11 (121 pts)</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Spacing</label>
-        <select id="scan-spacing">
-          <option value="0.5">500 m</option>
-          <option value="1" selected>1 km</option>
-          <option value="2.5">2.5 km</option>
-          <option value="5">5 km</option>
-        </select>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-cancel" onclick="closeModal('modal-new-scan')">Cancel</button>
-      <button class="btn-submit" onclick="submitNewScan()">Start Scan ▶</button>
-    </div>
-  </div>
-</div>
-
-<!-- ════════════════════════════════════════════════
-     JAVASCRIPT
-════════════════════════════════════════════════ -->
+<div id="root"><div style="display:flex;align-items:center;justify-content:center;min-height:100vh;color:#5f6b7a;font-size:16px">טוען...</div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script>
-// ── State ──────────────────────────────────────────────────────────────────────
-let map, businesses = [], activeBizId = null, currentScanId = null;
-let scanMarkers = [], pollInterval = null, keywords = [];
+"use strict";
+const h=React.createElement,{useState,useRef,useEffect,useCallback}=React;
+const SU="https://ughjtihrhysrwtnynydr.supabase.co",SK="sb_publishable_STybZgL44GRkqyYwmNJpgQ_fy1205Hf",SH={"apikey":SK,"Authorization":"Bearer "+SK};
+async function dbL(){try{const r=await fetch(SU+"/rest/v1/fp_data?id=eq.main&select=data",{headers:SH});const j=await r.json();return j?.[0]?.data||null}catch(e){return null}}
+async function dbS(d){try{await fetch(SU+"/rest/v1/fp_data?id=eq.main",{method:"PATCH",headers:{...SH,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({data:d,updated_at:new Date().toISOString()})})}catch(e){}}
+function gid(){return"i"+Math.random().toString(36).slice(2,9)}
+function fmt(n,c){const s=c==="$"?"$":"₪";const a=Math.abs(Math.round(n));return n<0?s+a.toLocaleString("en-US")+"-":s+a.toLocaleString("en-US")}
+const MH=["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
+function mkk(y,m){return y+"-"+String(m+1).padStart(2,"0")}
+const DIVS=[{id:"div1",name:"דיביזיה 1 — ייסוד ותקשורות"},{id:"div2",name:"דיביזיה 2 — הפצה"},{id:"div3",name:"דיביזיה 3 — אוצר"},{id:"div4",name:"דיביזיה 4 — ייצור"},{id:"div5",name:"דיביזיה 5 — הסמכות"},{id:"div6",name:"דיביזיה 6 — תפוצה (קידום)"},{id:"div7",name:"דיביזיה 7 — מנהלים"}];
+function FM(){return{grossIncome:0,vatAmount:0,fp1:[{id:gid(),desc:'מע"מ',val:17,isPct:true},{id:gid(),desc:"ביטוח לאומי",val:10,isPct:true},{id:gid(),desc:"מס הכנסה",val:10,isPct:true}],fp2:[],divisions:DIVS.map(d=>({...d})),divItems:[],approval:{},payment:{}}}
+const C={bg:"#f0f2f5",card:"#ffffff",card2:"#f8f9fb",bdr:"#e0e4ea",bdr2:"#d0d5dd",tx:"#1a1d23",txd:"#5f6b7a",txm:"#9ca3b0",blue:"#2563eb",blueD:"#dbeafe",green:"#059669",greenD:"#d1fae5",red:"#dc2626",redD:"#fee2e2",amber:"#d97706",amberD:"#fef3c7",purple:"#7c3aed",purpleD:"#ede9fe",cyan:"#0891b2",cyanD:"#cffafe"};
+function exportCSV(s,cF1,cF2,cur,mk){const R=[["מקור","תיאור","מבוקש","מאושר","שולם","סטטוס"]];R.push(["חודש",mk]);R.push(["הכנסה ברוטו","",s.grossIncome]);R.push([]);function aI(sec,items,fn){items.forEach(i=>{const amt=fn(i),ap=s.approval[i.id],py=s.payment[i.id],subs=py?.subs||[],pA=subs.length?subs.reduce((a,s)=>a+(s.paid||0),0):(py?.paidAmount||0);R.push([sec,i.desc||"",Math.round(amt),ap?.approved?ap.approvedAmount:0,pA,!ap?.approved?"לא מאושר":pA>=(ap?.approvedAmount||1)?"שולם":"ממתין"]);if(subs.length)subs.forEach(s=>R.push(["  ↳",s.desc||"",s.amount||0,"",s.paid||0,""]))})}R.push(["=== FP#1 ==="]);aI("FP#1",s.fp1,cF1);R.push([]);R.push(["=== כלליות ==="]);aI("כללי",s.fp2,cF2);(s.divisions||[]).forEach(d=>{const it=(s.divItems||[]).filter(x=>x.divId===d.id);if(it.length){R.push([]);R.push(["=== "+d.name+" ==="]);aI(d.name,it,i=>i.amount||0)}});const b="\uFEFF",csv=R.map(r=>r.map(c=>'"'+String(c??"").replace(/"/g,'""')+'"').join(",")).join("\n"),bl=new Blob([b+csv],{type:"text/csv;charset=utf-8"}),u=URL.createObjectURL(bl),a=document.createElement("a");a.href=u;a.download="FP_BUZZ_"+mk+".csv";a.click();URL.revokeObjectURL(u)}
 
-// ── Map Init ───────────────────────────────────────────────────────────────────
-map = L.map('map', { zoomControl: true }).setView([37.5, -96], 4);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '© OpenStreetMap contributors',
-  className: 'map-tiles'
-}).addTo(map);
-
-// ── Rank Colors ────────────────────────────────────────────────────────────────
-function rankColor(rank) {
-  if (rank <= 3)  return '#1a9c3e';
-  if (rank <= 7)  return '#5cb85c';
-  if (rank <= 10) return '#f0ad4e';
-  if (rank <= 14) return '#e67e22';
-  if (rank <= 17) return '#e74c3c';
-  return '#8e1a0e';
+// === Uncontrolled input components (top-level, no hooks issues) ===
+function UNum({id,val,onChange,color,w}){
+  const t=useRef(null);
+  return h("input",{type:"number",defaultValue:val??"",
+    onInput:e=>{const el=e.target;if(t.current)clearTimeout(t.current);t.current=setTimeout(()=>{silUpd(id,parseFloat(el.value)||0)},1500)},
+    onBlur:e=>{if(t.current){clearTimeout(t.current);t.current=null}onChange(parseFloat(e.target.value)||0)},
+    style:{background:C.bg,border:"1px solid "+C.bdr,color:color||"#2563eb",borderRadius:"5px",padding:"5px 6px",fontSize:"12px",fontFamily:"'JetBrains Mono',monospace",textAlign:"center",outline:"none",width:w||"80px"}});
+}
+function UTxt({id,val,onChange,placeholder}){
+  const t=useRef(null);
+  return h("input",{defaultValue:val??"",placeholder:placeholder||"",
+    onInput:e=>{const el=e.target;if(t.current)clearTimeout(t.current);t.current=setTimeout(()=>{silUpd(id,el.value)},1500)},
+    onBlur:e=>{if(t.current){clearTimeout(t.current);t.current=null}onChange(e.target.value)},
+    style:{background:"transparent",border:"none",color:C.tx,fontSize:"12px",fontFamily:"inherit",outline:"none",borderBottom:"1px solid "+C.bdr,paddingBottom:"2px",width:"100%"}});
+}
+function UGross({val,onChange,cur}){
+  const t=useRef(null);
+  return h("div",{style:{display:"flex",alignItems:"center",gap:"5px"}},
+    h("span",{style:{fontSize:"15px",color:C.blue,fontWeight:700}},cur),
+    h("input",{type:"number",defaultValue:val??"",
+      onInput:e=>{const el=e.target;if(t.current)clearTimeout(t.current);t.current=setTimeout(()=>{silUpd("_gross_",parseFloat(el.value)||0)},1500)},
+      onBlur:e=>{if(t.current){clearTimeout(t.current);t.current=null}onChange(parseFloat(e.target.value)||0)},
+      style:{background:"transparent",border:"none",color:C.tx,fontSize:"22px",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",outline:"none",width:"100%"}}));
+}
+function CC({cfg,ht}){
+  const ref=useRef(null),cr=useRef(null);
+  useEffect(()=>{if(!ref.current)return;if(cr.current)cr.current.destroy();try{cr.current=new Chart(ref.current,cfg)}catch(e){}return()=>{if(cr.current){cr.current.destroy();cr.current=null}}});
+  return h("canvas",{ref,style:{maxHeight:ht||"250px",width:"100%"}});
 }
 
-// ── Load Businesses ────────────────────────────────────────────────────────────
-async function loadBusinesses() {
-  const r = await fetch('/api/businesses');
-  businesses = await r.json();
-  renderBusinessList();
-}
+// Silent update ref (set by App)
+let silUpd=()=>{},silSaveRef={current:null},dataRefG={current:null},mkeyRefG={current:null};
 
-function renderBusinessList(filter = '') {
-  const list = document.getElementById('business-list');
-  const f = filter.toLowerCase();
-  const filtered = businesses.filter(b =>
-    b.name.toLowerCase().includes(f) || b.address.toLowerCase().includes(f)
+function Badge(p){return h("span",{style:{background:p.bg,color:p.color,fontWeight:800,padding:"2px 9px",borderRadius:"12px",fontSize:"11px",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap"}},p.children)}
+function AddBtn(p){return h("button",{onClick:p.onClick,style:{marginTop:"7px",width:"100%",background:"transparent",border:"1px dashed "+C.bdr2,color:C.blue,padding:"8px",borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontFamily:"inherit",fontWeight:600}},p.label||"+ הוסף שורה")}
+function RemBtn(p){return h("button",{onClick:p.onClick,style:{background:"transparent",border:"none",color:C.txm,cursor:"pointer",fontSize:"13px",padding:"3px 5px",borderRadius:"4px",lineHeight:1},onMouseOver:e=>e.currentTarget.style.color=C.red,onMouseOut:e=>e.currentTarget.style.color=C.txm},"✕")}
+function MoveBtn(p){return h("div",{style:{display:"flex",flexDirection:"column",gap:"1px"}},h("button",{onClick:()=>p.onMove(-1),style:{background:"transparent",border:"none",color:C.txm,cursor:"pointer",fontSize:"9px",padding:"0 3px",lineHeight:1}},"▲"),h("button",{onClick:()=>p.onMove(1),style:{background:"transparent",border:"none",color:C.txm,cursor:"pointer",fontSize:"9px",padding:"0 3px",lineHeight:1}},"▼"))}
+function ST(p){const bg=p.color===C.green?C.greenD:p.color===C.red?C.redD:p.color===C.purple?C.purpleD:p.color===C.amber?C.amberD:C.blueD;return h("div",{style:{padding:"10px 14px",borderRadius:"9px",background:bg,border:"1px solid "+p.color+"33",display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"10px"}},h("span",{style:{fontWeight:700,fontSize:"13px",color:"#1a1d23"}},p.label),h("span",{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:"15px",fontWeight:700,color:p.color}},fmt(p.value,p.cur)))}
+function Chev(p){return h("span",{style:{transform:p.open?"rotate(90deg)":"rotate(0)",transition:"transform 0.15s",display:"inline-block",fontSize:"10px",color:C.txm}},"▶")}
+function SC(p){return h("div",{style:{background:p.bg,borderRadius:"8px",padding:"7px 9px",border:"1px solid "+p.color+"33"}},h("div",{style:{fontSize:"9px",color:"#4a5060",fontWeight:600,whiteSpace:"nowrap"}},p.label),h("div",{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:p.big?"16px":"13px",fontWeight:700,color:p.color}},fmt(p.value,p.cur)))}
+
+// ===== MAIN APP =====
+function App(){
+  const[data,setData]=useState(null);
+  const now=new Date();
+  const[selY,setSelY]=useState(now.getFullYear());
+  const[selM,setSelM]=useState(now.getMonth());
+  const[tab,setTab]=useState("fp1");
+  const[expD,setExpD]=useState({});
+  const[expA,setExpA]=useState({fp1:true,fp2:true});
+  const[editDN,setEditDN]=useState(null);
+  const[showRst,setShowRst]=useState(false);
+  const[showCpy,setShowCpy]=useState(false);
+  const[expSubs,setExpSubs]=useState({});
+  const loaded=useRef(false);
+  const saveT=useRef(null);
+  const dataRef=useRef(null);
+  const mkRef=useRef(null);
+
+  const mkey=mkk(selY,selM);
+  mkRef.current=mkey;
+  mkeyRefG.current=mkey;
+
+  useEffect(()=>{dbL().then(d=>{if(!d)d={currency:"₪",months:{}};if(!d.months)d.months={};setData(d);dataRef.current=d;dataRefG.current=d;DIVS.forEach(v=>setExpD(p=>({...p,[v.id]:true})));loaded.current=true})},[]);
+  useEffect(()=>{dataRef.current=data;dataRefG.current=data},[data]);
+  useEffect(()=>{if(!loaded.current||!data)return;if(saveT.current)clearTimeout(saveT.current);saveT.current=setTimeout(()=>{dbS(dataRef.current)},2000);return()=>{if(saveT.current)clearTimeout(saveT.current)}},[data]);
+
+  // Silent update: modify dataRef without React re-render, save to DB after 3s
+  silUpd=function(fid,val){
+    if(!dataRef.current)return;
+    const d=JSON.parse(JSON.stringify(dataRef.current));
+    const mk=mkRef.current;if(!d.months[mk])d.months[mk]=FM();
+    const m=d.months[mk];
+    if(fid==="_gross_")m.grossIncome=val;
+    else if(fid==="vat")m.vatAmount=val;
+    else{let f=false;m.fp1=m.fp1.map(i=>{if(i.id===fid){f=true;return typeof val==="string"?{...i,desc:val}:{...i,val:val}}return i});if(!f)m.fp2=m.fp2.map(i=>{if(i.id===fid){f=true;return typeof val==="string"?{...i,desc:val}:{...i,val:val}}return i});if(!f)m.divItems=(m.divItems||[]).map(i=>{if(i.id===fid){f=true;return typeof val==="string"?{...i,desc:val}:{...i,amount:typeof val==="number"?val:i.amount}}return i})}
+    dataRef.current=d;dataRefG.current=d;
+    if(silSaveRef.current)clearTimeout(silSaveRef.current);
+    silSaveRef.current=setTimeout(()=>{dbS(dataRef.current)},3000);
+  };
+
+  const gM=useCallback(()=>{if(!data)return FM();return data.months[mkey]||FM()},[data,mkey]);
+  const sM=useCallback(fn=>{setData(p=>{const m=p.months[mkey]||FM();return{...p,months:{...p.months,[mkey]:{...fn(m)}}}})},[mkey]);
+
+  if(!data)return h("div",{style:{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.txd}},"טוען...");
+
+  const s=gM(),cur=data.currency||"₪";
+  const vA=s.vatAmount||0,gNV=s.grossIncome-vA;
+  const cF1=i=>i.isPct?(gNV*i.val/100):i.val;
+  const fp1P=vA+s.fp1.reduce((a,i)=>a+cF1(i),0);
+  const cG=s.grossIncome-fp1P;
+  const cF2=i=>i.isPct?(cG*i.val/100):i.val;
+  const fp2P=s.fp2.reduce((a,i)=>a+cF2(i),0);
+  const dP=(s.divItems||[]).reduce((a,i)=>a+(i.amount||0),0);
+  const tP=fp1P+fp2P+dP;
+  const vatI={id:"_vat_",desc:'מע"מ',_amt:vA,_src:"vat"};
+  const allI=[vatI,...s.fp1.map(i=>({...i,_amt:cF1(i),_src:"fp1"})),...s.fp2.map(i=>({...i,_amt:cF2(i),_src:"fp2"})),...(s.divItems||[]).map(i=>({...i,_amt:i.amount||0,_src:"div"}))];
+  const tAp=allI.reduce((a,i)=>a+(s.approval[i.id]?.approved?s.approval[i.id].approvedAmount:0),0);
+  const tPd=allI.reduce((a,i)=>{const py=s.payment[i.id]||{};const subs=py.subs||[];return a+(subs.length?subs.reduce((x,s)=>x+(s.paid||0),0):(py.paidAmount||0))},0);
+  const rem=s.grossIncome-tAp;
+  const divs=s.divisions||DIVS;
+
+  const togCur=()=>setData(p=>({...p,currency:p.currency==="₪"?"$":"₪"}));
+  const setGross=v=>sM(m=>({...m,grossIncome:v}));
+  const addFp1=()=>sM(m=>({...m,fp1:[...m.fp1,{id:gid(),desc:"",val:0,isPct:false}]}));
+  const updFp1=(id,f,v)=>sM(m=>({...m,fp1:m.fp1.map(i=>i.id===id?{...i,[f]:v}:i)}));
+  const rmFp1=id=>sM(m=>{const a={...m.approval};delete a[id];const p={...m.payment};delete p[id];return{...m,fp1:m.fp1.filter(i=>i.id!==id),approval:a,payment:p}});
+  const mvFp1=(id,d)=>sM(m=>{const idx=m.fp1.findIndex(i=>i.id===id);const ni=idx+d;if(ni<0||ni>=m.fp1.length)return m;const a=[...m.fp1];[a[idx],a[ni]]=[a[ni],a[idx]];return{...m,fp1:a}});
+  const addFp2=()=>sM(m=>({...m,fp2:[...m.fp2,{id:gid(),desc:"",val:0,isPct:false}]}));
+  const updFp2=(id,f,v)=>sM(m=>({...m,fp2:m.fp2.map(i=>i.id===id?{...i,[f]:v}:i)}));
+  const rmFp2=id=>sM(m=>{const a={...m.approval};delete a[id];const p={...m.payment};delete p[id];return{...m,fp2:m.fp2.filter(i=>i.id!==id),approval:a,payment:p}});
+  const mvFp2=(id,d)=>sM(m=>{const idx=m.fp2.findIndex(i=>i.id===id);const ni=idx+d;if(ni<0||ni>=m.fp2.length)return m;const a=[...m.fp2];[a[idx],a[ni]]=[a[ni],a[idx]];return{...m,fp2:a}});
+  const updDN=(id,n)=>sM(m=>({...m,divisions:(m.divisions||DIVS).map(d=>d.id===id?{...d,name:n}:d)}));
+  const addDI=dId=>sM(m=>({...m,divItems:[...(m.divItems||[]),{id:gid(),divId:dId,desc:"",amount:0}]}));
+  const updDI=(id,f,v)=>sM(m=>({...m,divItems:(m.divItems||[]).map(i=>i.id===id?{...i,[f]:v}:i)}));
+  const rmDI=id=>sM(m=>{const a={...m.approval};delete a[id];const p={...m.payment};delete p[id];return{...m,divItems:(m.divItems||[]).filter(i=>i.id!==id),approval:a,payment:p}});
+  const mvDI=(id,d)=>sM(m=>{const it=m.divItems||[];const idx=it.findIndex(i=>i.id===id);if(idx<0)return m;const dId=it[idx].divId;const dIt=it.filter(i=>i.divId===dId);const dIdx=dIt.findIndex(i=>i.id===id);const ni=dIdx+d;if(ni<0||ni>=dIt.length)return m;const o=dIt[ni];const a=[...it];const i1=a.findIndex(i=>i.id===id),i2=a.findIndex(i=>i.id===o.id);[a[i1],a[i2]]=[a[i2],a[i1]];return{...m,divItems:a}});
+  const setAp=(id,ok,amt)=>sM(m=>({...m,approval:{...m.approval,[id]:{approved:ok,approvedAmount:ok?amt:0}}}));
+  const setPy=(id,pA)=>{const aA=s.approval[id]?.approvedAmount||0;sM(m=>({...m,payment:{...m.payment,[id]:{...(m.payment[id]||{}),status:pA>=aA&&aA>0?"paid":pA>0?"partial":"unpaid",paidAmount:pA}}}))};
+  const addSub=iid=>sM(m=>{const py={...(m.payment||{})};const c=py[iid]||{status:"unpaid",paidAmount:0,subs:[]};py[iid]={...c,subs:[...(c.subs||[]),{id:gid(),desc:"",amount:0,paid:0}]};return{...m,payment:py}});
+  const updSub=(iid,sid,f,v)=>sM(m=>{const py={...(m.payment||{})};const c=py[iid]||{status:"unpaid",paidAmount:0,subs:[]};const subs=(c.subs||[]).map(s=>s.id===sid?{...s,[f]:v}:s);const tp=subs.reduce((a,s)=>a+(s.paid||0),0);const aA=(m.approval||{})[iid]?.approvedAmount||0;py[iid]={...c,subs,paidAmount:tp,status:tp>=aA&&aA>0?"paid":tp>0?"partial":"unpaid"};return{...m,payment:py}});
+  const rmSub=(iid,sid)=>sM(m=>{const py={...(m.payment||{})};const c=py[iid]||{subs:[]};const subs=(c.subs||[]).filter(s=>s.id!==sid);const tp=subs.reduce((a,s)=>a+(s.paid||0),0);const aA=(m.approval||{})[iid]?.approvedAmount||0;py[iid]={...c,subs,paidAmount:tp,status:tp>=aA&&aA>0?"paid":tp>0?"partial":"unpaid"};return{...m,payment:py}});
+  const rstMo=()=>{sM(()=>FM());setShowRst(false)};
+  const exMo=Object.keys(data.months).filter(k=>k!==mkey&&data.months[k].grossIncome>0).sort().reverse();
+  const cpFrom=sk=>{const src=data.months[sk];if(!src)return;const mi=i=>({...i,id:gid()});sM(()=>({grossIncome:src.grossIncome,vatAmount:src.vatAmount||0,fp1:src.fp1.map(mi),fp2:src.fp2.map(mi),divisions:(src.divisions||DIVS).map(d=>({...d})),divItems:(src.divItems||[]).map(mi),approval:{},payment:{}}));setShowCpy(false)};
+  const prevMo=()=>{if(selM===0){setSelM(11);setSelY(y=>y-1)}else setSelM(m=>m-1)};
+  const nextMo=()=>{if(selM===11){setSelM(0);setSelY(y=>y+1)}else setSelM(m=>m+1)};
+
+  // Row components
+  function FpRow({item,cA,uF,rF,mF}){const amt=cA(item);return h("div",{style:{display:"grid",gridTemplateColumns:"20px 1fr 60px 80px 80px 26px",gap:"5px",alignItems:"center",padding:"6px 8px",background:C.bg,borderRadius:"6px",border:"1px solid "+C.bdr}},h(MoveBtn,{onMove:d=>mF(item.id,d)}),h(UTxt,{id:"d_"+item.id,val:item.desc,onChange:v=>uF(item.id,"desc",v),placeholder:"תיאור..."}),h("div",{style:{display:"flex",justifyContent:"center"}},h("button",{onClick:()=>uF(item.id,"isPct",!item.isPct),style:{background:item.isPct?C.blueD:C.greenD,border:"1px solid "+(item.isPct?C.blue:C.green)+"44",color:item.isPct?C.blue:C.green,borderRadius:"4px",padding:"1px 6px",cursor:"pointer",fontSize:"10px",fontWeight:700,fontFamily:"inherit"}},item.isPct?"%":cur)),h(UNum,{id:"v_"+item.id,val:item.val,onChange:v=>uF(item.id,"val",v),w:"70px"}),h("div",{style:{textAlign:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:"11px",color:C.txd}},fmt(Math.round(amt),cur)),h(RemBtn,{onClick:()=>rF(item.id)}))}
+
+  function ARow({id,desc,rAmt,extra}){const ap=s.approval[id]||{},isA=!!ap.approved;return h("div",{style:{display:"grid",gridTemplateColumns:"1fr 80px 95px 75px",gap:"5px",alignItems:"center",padding:"7px 0",borderBottom:"1px solid "+C.bdr+"15"}},h("div",null,h("div",{style:{fontSize:"12px",color:isA?C.tx:C.txd}},desc||"(ללא תיאור)"),extra&&h("div",{style:{fontSize:"10px",color:C.txm}},extra)),h("div",{style:{textAlign:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:"11px",color:C.txd}},fmt(Math.round(rAmt),cur)),h(UNum,{id:"ap_"+id,val:isA?ap.approvedAmount:0,onChange:v=>setAp(id,v>0,v),color:isA?C.green:C.txd,w:"85px"}),h("div",{style:{display:"flex",justifyContent:"center"}},h("button",{onClick:()=>{if(isA)setAp(id,false,0);else setAp(id,true,Math.round(rAmt))},style:{background:isA?C.greenD:C.bdr+"55",border:"1px solid "+(isA?C.green:C.bdr)+"44",color:isA?C.green:C.txm,borderRadius:"5px",padding:"3px 8px",cursor:"pointer",fontSize:"10px",fontWeight:700,fontFamily:"inherit"}},isA?"✓":"אשר")))}
+
+  function PRow({id,desc,aAmt,sec}){const py=s.payment[id]||{},subs=py.subs||[],hasSubs=subs.length>0,pA=hasSubs?subs.reduce((a,s)=>a+(s.paid||0),0):(py.paidAmount||0),st=pA>=aAmt&&aAmt>0?"paid":pA>0?"partial":"unpaid",stL=st==="paid"?"שולם":st==="partial"?"חלקי":"ממתין",stC=st==="paid"?C.green:st==="partial"?C.amber:C.txm,isE=expSubs[id];
+    return h("div",null,h("div",{style:{display:"grid",gridTemplateColumns:"28px 1fr 75px 85px 75px 70px",gap:"5px",alignItems:"center",padding:"6px 0",borderBottom:isE?"none":"1px solid "+C.bdr+"15"}},h("button",{onClick:()=>setExpSubs(p=>({...p,[id]:!p[id]})),style:{background:"transparent",border:"none",color:C.blue,cursor:"pointer",fontSize:"11px",fontFamily:"inherit",padding:"2px"}},isE?"▼":"⊕"),h("div",null,h("div",{style:{fontSize:"11px",color:C.tx}},desc),h("div",{style:{fontSize:"9px",color:C.txm}},sec)),h("div",{style:{textAlign:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:"11px",color:C.tx}},fmt(aAmt,cur)),hasSubs?h("div",{style:{textAlign:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:"11px",color:C.cyan}},fmt(pA,cur)):h(UNum,{id:"py_"+id,val:pA,onChange:v=>setPy(id,v),color:pA>0?C.cyan:C.txd,w:"75px"}),h("div",{style:{textAlign:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:"11px",color:C.txd}},fmt(aAmt-pA,cur)),h("div",{style:{display:"flex",justifyContent:"center"}},h("span",{style:{fontSize:"10px",fontWeight:600,color:stC,background:stC+"15",padding:"2px 8px",borderRadius:"8px",whiteSpace:"nowrap"}},stL))),
+      isE&&h("div",{style:{padding:"4px 0 8px 36px",borderBottom:"1px solid "+C.bdr+"15"}},subs.map(sub=>h("div",{key:sub.id,style:{display:"grid",gridTemplateColumns:"1fr 80px 80px 24px",gap:"5px",alignItems:"center",padding:"4px 0"}},h(UTxt,{id:"sd_"+sub.id,val:sub.desc,onChange:v=>updSub(id,sub.id,"desc",v),placeholder:"פירוט..."}),h(UNum,{id:"sa_"+sub.id,val:sub.amount,onChange:v=>updSub(id,sub.id,"amount",v),w:"70px",color:C.txd}),h(UNum,{id:"sp_"+sub.id,val:sub.paid,onChange:v=>updSub(id,sub.id,"paid",v),w:"70px",color:sub.paid>0?C.cyan:C.txd}),h(RemBtn,{onClick:()=>rmSub(id,sub.id)}))),h("div",{style:{display:"flex",gap:"8px",marginTop:"4px",alignItems:"center"}},h("button",{onClick:()=>addSub(id),style:{background:"transparent",border:"1px dashed "+C.bdr2,color:C.blue,padding:"4px 12px",borderRadius:"5px",cursor:"pointer",fontSize:"10px",fontFamily:"inherit"}},"+ פירוט"),subs.length>0&&h("div",{style:{fontSize:"10px",color:C.txd}},"סה״כ: "+fmt(subs.reduce((a,s)=>a+(s.amount||0),0),cur)+" | שולם: "+fmt(pA,cur)))))}
+
+  const tabs=[{k:"fp1",l:"FP#1",i:"📋"},{k:"fp2",l:"FP",i:"📊"},{k:"approve",l:"אישור",i:"🔍"},{k:"approved",l:"מאושרות",i:"✅"},{k:"dash",l:"דשבורד",i:"📈"}];
+  const cH4=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 80px 95px 75px",gap:"5px",padding:"0 0 4px",fontSize:"9px",color:C.txm,fontWeight:700}},h("div",null,"תיאור"),h("div",{style:{textAlign:"center"}},"מבוקש"),h("div",{style:{textAlign:"center"}},"מאושר"),h("div",{style:{textAlign:"center"}},"אישור"));
+  const fpH=h("div",{style:{display:"grid",gridTemplateColumns:"20px 1fr 60px 80px 80px 26px",gap:"5px",padding:"0 8px 4px",fontSize:"9px",color:C.txm,fontWeight:700}},h("div"),h("div",null,"תיאור"),h("div",{style:{textAlign:"center"}},"סוג"),h("div",{style:{textAlign:"center"}},"ערך"),h("div",{style:{textAlign:"center"}},"סכום"),h("div"));
+  const pH=h("div",{style:{padding:"0 12px 4px",display:"grid",gridTemplateColumns:"28px 1fr 75px 85px 75px 70px",gap:"5px",fontSize:"9px",color:C.txm,fontWeight:700}},h("div"),h("div",null,"תיאור"),h("div",{style:{textAlign:"center"}},"מאושר"),h("div",{style:{textAlign:"center"}},"שולם"),h("div",{style:{textAlign:"center"}},"יתרה"),h("div",{style:{textAlign:"center"}},"סטטוס"));
+
+  function ColSec({title,badge,bC,bB,isO,onTog,hBg,children}){return h("div",{style:{background:C.card,borderRadius:"9px",border:"1px solid "+C.bdr,overflow:"hidden",marginBottom:"6px"}},h("div",{onClick:onTog,style:{padding:"10px 14px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:isO?"1px solid "+C.bdr:"none",background:hBg||"transparent"}},h("div",{style:{display:"flex",alignItems:"center",gap:"7px"}},h(Chev,{open:isO}),h("span",{style:{fontWeight:700,fontSize:"13px",color:"#1a1d23"}},title)),badge!=null&&h(Badge,{color:bC,bg:bB},badge)),isO&&h("div",{style:{padding:"8px 14px"}},children))}
+
+  return h("div",null,
+    // HEADER
+    h("div",{style:{background:"linear-gradient(180deg,"+C.card+","+C.bg+")",borderBottom:"1px solid "+C.bdr,padding:"14px 14px 0",position:"sticky",top:0,zIndex:100}},h("div",{style:{maxWidth:960,margin:"0 auto"}},
+      h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}},h("h1",{style:{margin:0,fontSize:"17px",fontWeight:700}},h("span",{style:{color:C.blue}},"BUZZ")," תכנון פיננסי"),h("div",{style:{display:"flex",gap:"5px",alignItems:"center"}},h("div",{style:{display:"flex",borderRadius:"5px",overflow:"hidden",border:"1px solid "+C.bdr}},["₪","$"].map(c=>h("button",{key:c,onClick:togCur,style:{background:cur===c?C.blue:"transparent",border:"none",color:cur===c?"#fff":C.txd,padding:"2px 9px",cursor:"pointer",fontSize:"11px",fontWeight:600,fontFamily:"inherit"}},c))),h("button",{onClick:()=>exportCSV(s,cF1,cF2,cur,mkey),style:{background:C.greenD,border:"1px solid "+C.green+"33",color:C.green,padding:"2px 8px",borderRadius:"5px",cursor:"pointer",fontSize:"10px",fontFamily:"inherit",fontWeight:600}},"📥"),h("button",{onClick:()=>setShowRst(true),style:{background:"transparent",border:"1px solid "+C.bdr,color:C.txm,padding:"2px 7px",borderRadius:"5px",cursor:"pointer",fontSize:"9px",fontFamily:"inherit"}},"איפוס"))),
+      h("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:"12px",marginBottom:"12px",background:C.card,borderRadius:"10px",padding:"8px 16px",border:"1px solid "+C.bdr}},h("button",{onClick:prevMo,style:{background:"transparent",border:"none",color:C.txd,cursor:"pointer",fontSize:"16px",padding:"2px 8px"}},"◀"),h("div",{style:{textAlign:"center",minWidth:"140px"}},h("div",{style:{fontSize:"18px",fontWeight:700,color:C.blue}},MH[selM]),h("div",{style:{fontSize:"12px",color:C.txd}},selY)),h("button",{onClick:nextMo,style:{background:"transparent",border:"none",color:C.txd,cursor:"pointer",fontSize:"16px",padding:"2px 8px"}},"▶"),exMo.length>0&&h("button",{onClick:()=>setShowCpy(!showCpy),style:{background:C.purpleD,border:"1px solid "+C.purple+"33",color:C.purple,padding:"3px 10px",borderRadius:"5px",cursor:"pointer",fontSize:"10px",fontFamily:"inherit",fontWeight:600,marginRight:"8px"}},"📋 העתק")),
+      showCpy&&exMo.length>0&&h("div",{style:{background:C.card,border:"1px solid "+C.bdr,borderRadius:"8px",padding:"10px 14px",marginBottom:"10px"}},h("div",{style:{fontSize:"11px",color:C.txd,marginBottom:"6px"}},"העתק תכנון:"),h("div",{style:{display:"flex",flexWrap:"wrap",gap:"4px"}},exMo.map(k=>{const[y,m]=k.split("-");return h("button",{key:k,onClick:()=>cpFrom(k),style:{background:C.bg,border:"1px solid "+C.bdr,color:C.tx,padding:"4px 12px",borderRadius:"6px",cursor:"pointer",fontSize:"11px",fontFamily:"inherit"}},MH[parseInt(m)-1]+" "+y)}))),
+      h("div",{style:{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:"5px",marginBottom:"10px"}},[{l:"ברוטו",v:s.grossIncome,c:C.blue,b:C.blueD},{l:"מתוכנן",v:tP,c:C.amber,b:C.amberD},{l:"מאושר",v:tAp,c:C.purple,b:C.purpleD},{l:"שולם",v:tPd,c:C.cyan,b:C.cyanD},{l:"נותר",v:rem,c:rem>=0?C.green:C.red,b:rem>=0?C.greenD:C.redD}].map((c,i)=>h(SC,{key:i,label:c.l,value:c.v,color:c.c,bg:c.b,cur}))),
+      h("div",{style:{display:"flex",gap:"2px",overflowX:"auto"}},tabs.map(t=>h("button",{key:t.k,onClick:()=>setTab(t.k),style:{background:tab===t.k?C.card:"transparent",border:"1px solid "+(tab===t.k?C.bdr2:"transparent"),borderBottom:tab===t.k?"1px solid "+C.card:"1px solid "+C.bdr,color:tab===t.k?C.tx:C.txd,padding:"8px 12px",borderRadius:"7px 7px 0 0",cursor:"pointer",fontSize:"11px",fontWeight:tab===t.k?700:400,fontFamily:"inherit",marginBottom:"-1px",whiteSpace:"nowrap"}},t.i+" "+t.l))))),
+
+    // CONTENT
+    h("div",{style:{maxWidth:960,margin:"0 auto",padding:"14px"}},
+      // FP#1
+      tab==="fp1"&&h("div",{style:{background:C.card,borderRadius:"11px",border:"1px solid "+C.bdr,padding:"16px"}},h("h2",{style:{margin:"0 0 3px",fontSize:"14px"}},"📋 תכנון פיננסי #1 - הוצאות הכרחיות"),h("p",{style:{margin:"0 0 12px",fontSize:"11px",color:"#4a5060"}},"אחוזים מחושבים מהברוטו ללא מע״מ."),
+        h("div",{style:{background:"linear-gradient(135deg,"+C.blueD+","+C.purpleD+")",borderRadius:"9px",padding:"11px 13px",marginBottom:"12px",border:"1px solid "+C.blue+"33"}},h("div",{style:{fontSize:"10px",color:C.txd,marginBottom:"3px"}},"הכנסה ברוטו — "+MH[selM]+" "+selY),h(UGross,{val:s.grossIncome,onChange:setGross,cur})),
+        h("div",{style:{display:"flex",gap:"8px",marginBottom:"12px"}},h("div",{style:{flex:1,background:C.amberD,borderRadius:"9px",padding:"10px 13px",border:"1px solid "+C.amber+"22"}},h("div",{style:{fontSize:"11px",color:"#4a5060",fontWeight:600,marginBottom:"3px"}},'סכום מע"מ (הזן ידנית)'),h("div",{style:{display:"flex",alignItems:"center",gap:"5px"}},h("span",{style:{fontSize:"14px",color:C.amber,fontWeight:700}},cur),h(UNum,{id:"vat",val:s.vatAmount||0,onChange:v=>sM(m=>({...m,vatAmount:v})),color:C.amber,w:"100px"}))),h("div",{style:{flex:1,background:C.purpleD,borderRadius:"9px",padding:"10px 13px",border:"1px solid "+C.purple+"22"}},h("div",{style:{fontSize:"11px",color:"#4a5060",fontWeight:600,marginBottom:"3px"}},"ברוטו ללא מע״מ"),h("div",{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:"18px",fontWeight:700,color:C.purple}},fmt(Math.round(gNV),cur)))),
+        fpH,h("div",{style:{display:"flex",flexDirection:"column",gap:"3px"}},s.fp1.map(i=>h(FpRow,{key:i.id,item:i,cA:cF1,uF:updFp1,rF:rmFp1,mF:mvFp1}))),h(AddBtn,{onClick:addFp1}),
+        h("div",{style:{padding:"8px 12px",borderRadius:"8px",background:C.bg,border:"1px solid "+C.bdr,marginTop:"10px",display:"flex",justifyContent:"space-between"}},h("span",{style:{fontSize:"12px",color:"#1a1d23",fontWeight:600}},'מע"מ'),h("span",{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:"13px",fontWeight:600,color:C.amber}},fmt(Math.round(vA),cur))),
+        h(ST,{label:'סה"כ FP#1 (כולל מע"מ)',value:fp1P,cur,color:C.red}),h(ST,{label:"ברוטו מתוקנת (אחרי FP#1)",value:cG,cur,color:C.purple})),
+
+      // FP#2
+      tab==="fp2"&&h("div",null,h("div",{style:{background:C.card,borderRadius:"11px",border:"1px solid "+C.bdr,padding:"14px",marginBottom:"8px"}},h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}},h("h2",{style:{margin:0,fontSize:"14px"}},"📊 תכנון פיננסי"),h(Badge,{color:C.purple,bg:C.purpleD},"מתוקנת: "+fmt(Math.round(cG),cur))),h("div",{style:{fontSize:"11px",color:"#3a4050",fontWeight:700,marginBottom:"4px"}},"הקצאות כלליות"),fpH,h("div",{style:{display:"flex",flexDirection:"column",gap:"3px"}},s.fp2.map(i=>h(FpRow,{key:i.id,item:i,cA:cF2,uF:updFp2,rF:rmFp2,mF:mvFp2}))),h(AddBtn,{onClick:addFp2,label:"+ הוסף הקצאה"}),h(ST,{label:'סה"כ כלליות',value:fp2P,cur,color:C.amber})),
+        divs.map(div=>{const it=(s.divItems||[]).filter(i=>i.divId===div.id);const dT=it.reduce((a,i)=>a+(i.amount||0),0);const isO=expD[div.id];return h("div",{key:div.id,style:{background:C.card,borderRadius:"9px",border:"1px solid "+C.bdr,overflow:"hidden",marginBottom:"5px"}},h("div",{onClick:()=>setExpD(p=>({...p,[div.id]:!p[div.id]})),style:{padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:isO?"1px solid "+C.bdr:"none"}},h("div",{style:{display:"flex",alignItems:"center",gap:"7px"}},h(Chev,{open:isO}),h("span",{style:{fontWeight:700,fontSize:"12px",color:"#1a1d23"}},div.name)),h("span",{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:"11px",fontWeight:700,color:dT>0?C.blue:C.txm}},fmt(dT,cur))),isO&&h("div",{style:{padding:"8px 12px"}},it.map(i=>h("div",{key:i.id,style:{display:"grid",gridTemplateColumns:"20px 1fr 85px 26px",gap:"5px",alignItems:"center",padding:"5px 0",borderBottom:"1px solid "+C.bdr+"15"}},h(MoveBtn,{onMove:d=>mvDI(i.id,d)}),h(UTxt,{id:"dd_"+i.id,val:i.desc,onChange:v=>updDI(i.id,"desc",v),placeholder:"תיאור..."}),h(UNum,{id:"da_"+i.id,val:i.amount,onChange:v=>updDI(i.id,"amount",v),w:"75px"}),h(RemBtn,{onClick:()=>rmDI(i.id)}))),h(AddBtn,{onClick:()=>addDI(div.id),label:"+ פריט"})))}),
+        h(ST,{label:'סה"כ תכנון',value:fp2P+dP,cur,color:C.amber})),
+
+      // APPROVE
+      tab==="approve"&&h("div",null,h("div",{style:{background:C.card,borderRadius:"11px",border:"1px solid "+C.bdr,padding:"14px",marginBottom:"10px"}},h("h2",{style:{margin:"0 0 3px",fontSize:"14px"}},"🔍 אישור — "+MH[selM]+" "+selY),h("p",{style:{margin:"0 0 10px",fontSize:"10px",color:C.txd}},"אשר סכום מלא או חלקי."),h("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"5px"}},[{l:"ברוטו",v:s.grossIncome,c:C.blue,b:C.blueD},{l:"מאושר",v:tAp,c:C.purple,b:C.purpleD},{l:"נותר",v:rem,c:rem>=0?C.green:C.red,b:rem>=0?C.greenD:C.redD}].map((c,i)=>h(SC,{key:i,label:c.l,value:c.v,color:c.c,bg:c.b,cur,big:true})))),
+        h(ColSec,{title:"📋 FP#1 - הוצאות הכרחיות",badge:fmt((s.approval["_vat_"]?.approved?s.approval["_vat_"].approvedAmount:0)+s.fp1.reduce((a,i)=>a+(s.approval[i.id]?.approved?s.approval[i.id].approvedAmount:0),0),cur),bC:C.red,bB:C.redD,isO:expA.fp1,onTog:()=>setExpA(p=>({...p,fp1:!p.fp1})),hBg:C.redD+"44"},cH4,h(ARow,{id:"_vat_",desc:'מע"מ',rAmt:vA}),s.fp1.map(i=>h(ARow,{key:i.id,id:i.id,desc:i.desc,rAmt:cF1(i),extra:i.isPct?i.val+"%":null}))),
+        h(ColSec,{title:"📊 הקצאות כלליות",badge:fmt(s.fp2.reduce((a,i)=>a+(s.approval[i.id]?.approved?s.approval[i.id].approvedAmount:0),0),cur),bC:C.amber,bB:C.amberD,isO:expA.fp2,onTog:()=>setExpA(p=>({...p,fp2:!p.fp2})),hBg:C.amberD+"44"},cH4,s.fp2.map(i=>h(ARow,{key:i.id,id:i.id,desc:i.desc,rAmt:cF2(i),extra:i.isPct?i.val+"%":null}))),
+        divs.map(div=>{const it=(s.divItems||[]).filter(i=>i.divId===div.id);if(!it.length)return null;const dA=it.reduce((a,i)=>a+(s.approval[i.id]?.approved?s.approval[i.id].approvedAmount:0),0);return h(ColSec,{key:div.id,title:"🏢 "+div.name,badge:fmt(dA,cur),bC:C.blue,bB:C.blueD,isO:expD[div.id],onTog:()=>setExpD(p=>({...p,[div.id]:!p[div.id]})),hBg:C.blueD+"44"},cH4,it.map(i=>h(ARow,{key:i.id,id:i.id,desc:i.desc,rAmt:i.amount||0})))}),
+        h(ST,{label:'סה"כ מאושר',value:tAp,cur,color:C.purple}),h(ST,{label:"נותר",value:rem,cur,color:rem>=0?C.green:C.red})),
+
+      // APPROVED + PAYMENTS
+      tab==="approved"&&(()=>{const ai=allI.filter(i=>s.approval[i.id]?.approved);const f1v=ai.filter(i=>i._src==="vat");const f1=ai.filter(i=>i._src==="fp1");const f2=ai.filter(i=>i._src==="fp2");const dG={};ai.filter(i=>i._src==="div").forEach(i=>{const d=divs.find(x=>x.id===i.divId);const k=d?.id||"x";if(!dG[k])dG[k]={n:d?.name||"",it:[]};dG[k].it.push(i)});
+        return h("div",null,h("div",{style:{background:C.card,borderRadius:"11px",border:"1px solid "+C.bdr,padding:"14px",marginBottom:"10px"}},h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}},h("div",null,h("h2",{style:{margin:0,fontSize:"14px"}},"✅ מאושרות — "+MH[selM]),h("p",{style:{margin:"2px 0 0",fontSize:"10px",color:C.txd}},"מעקב תשלומים. לחץ ⊕ לפירוט.")),h("button",{onClick:()=>exportCSV(s,cF1,cF2,cur,mkey),style:{background:C.greenD,border:"1px solid "+C.green+"33",color:C.green,padding:"5px 12px",borderRadius:"6px",cursor:"pointer",fontSize:"11px",fontFamily:"inherit",fontWeight:600}},"📥 ייצוא")),h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"5px"}},[{l:"מאושר",v:tAp,c:C.purple,b:C.purpleD},{l:"שולם",v:tPd,c:C.cyan,b:C.cyanD},{l:"ממתין",v:tAp-tPd,c:C.amber,b:C.amberD},{l:"נותר",v:rem,c:rem>=0?C.green:C.red,b:rem>=0?C.greenD:C.redD}].map((c,i)=>h(SC,{key:i,label:c.l,value:c.v,color:c.c,bg:c.b,cur,big:true})))),
+          ai.length===0&&h("div",{style:{textAlign:"center",padding:"30px",color:C.txm}},"אין פריטים מאושרים."),
+          ai.length>0&&pH,
+          (f1v.length>0||f1.length>0)&&h("div",{style:{background:C.card,borderRadius:"9px",border:"1px solid "+C.bdr,padding:"8px 12px",marginBottom:"5px"}},h("div",{style:{fontSize:"10px",fontWeight:700,color:C.red,marginBottom:"4px"}},"📋 FP#1"),f1v.map(i=>h(PRow,{key:i.id,id:i.id,desc:i.desc,aAmt:s.approval[i.id].approvedAmount,sec:"FP#1"})),f1.map(i=>h(PRow,{key:i.id,id:i.id,desc:i.desc,aAmt:s.approval[i.id].approvedAmount,sec:"FP#1"}))),
+          f2.length>0&&h("div",{style:{background:C.card,borderRadius:"9px",border:"1px solid "+C.bdr,padding:"8px 12px",marginBottom:"5px"}},h("div",{style:{fontSize:"10px",fontWeight:700,color:C.amber,marginBottom:"4px"}},"📊 כלליות"),f2.map(i=>h(PRow,{key:i.id,id:i.id,desc:i.desc,aAmt:s.approval[i.id].approvedAmount,sec:"כללי"}))),
+          Object.entries(dG).map(([k,g])=>h("div",{key:k,style:{background:C.card,borderRadius:"9px",border:"1px solid "+C.bdr,padding:"8px 12px",marginBottom:"5px"}},h("div",{style:{fontSize:"10px",fontWeight:700,color:C.blue,marginBottom:"4px"}},"🏢 "+g.n),g.it.map(i=>h(PRow,{key:i.id,id:i.id,desc:i.desc,aAmt:s.approval[i.id].approvedAmount,sec:g.n})))),
+          ai.length>0&&h("div",{style:{marginTop:"10px",padding:"12px 16px",background:"linear-gradient(135deg,"+C.cyanD+","+C.card+")",borderRadius:"11px",border:"1px solid "+C.cyan+"22"}},h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},h("div",null,h("div",{style:{fontSize:"12px",fontWeight:700}},"סיכום — "+MH[selM]),h("div",{style:{fontSize:"10px",color:C.txd,marginTop:"2px"}},ai.filter(i=>{const py=s.payment[i.id]||{};const subs=py.subs||[];const pA=subs.length?subs.reduce((a,s)=>a+(s.paid||0),0):(py.paidAmount||0);return pA>=(s.approval[i.id]?.approvedAmount||1)}).length+" שולמו · "+ai.filter(i=>{const py=s.payment[i.id]||{};const subs=py.subs||[];const pA=subs.length?subs.reduce((a,s)=>a+(s.paid||0),0):(py.paidAmount||0);return pA>0&&pA<(s.approval[i.id]?.approvedAmount||1)}).length+" חלקי · "+ai.filter(i=>{const py=s.payment[i.id]||{};const subs=py.subs||[];const pA=subs.length?subs.reduce((a,s)=>a+(s.paid||0),0):(py.paidAmount||0);return pA===0}).length+" ממתינים")),h("div",{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:"18px",fontWeight:700,color:C.cyan}},fmt(tPd,cur),h("span",{style:{fontSize:"10px",color:C.txd,fontWeight:400}}," / "+fmt(tAp,cur))))))})(),
+
+      // DASHBOARD
+      tab==="dash"&&(()=>{const moD=Object.keys(data.months).sort().map(k=>{const m=data.months[k];if(!m?.grossIncome)return null;const va=m.vatAmount||0,gnv=m.grossIncome-va;const cf1=i=>i.isPct?(gnv*i.val/100):i.val;const f1t=va+(m.fp1||[]).reduce((a,i)=>a+cf1(i),0);const cg=m.grossIncome-f1t;const cf2=i=>i.isPct?(cg*i.val/100):i.val;const vi={id:"_vat_",_amt:va,_src:"vat"};const ai=[vi,...(m.fp1||[]).map(i=>({...i,_amt:cf1(i)})),...(m.fp2||[]).map(i=>({...i,_amt:cf2(i)})),...(m.divItems||[]).map(i=>({...i,_amt:i.amount||0}))];const tA=ai.reduce((a,i)=>a+((m.approval||{})[i.id]?.approved?(m.approval||{})[i.id].approvedAmount:0),0);const tP=ai.reduce((a,i)=>{const py=(m.payment||{})[i.id]||{};const subs=py.subs||[];return a+(subs.length?subs.reduce((x,s)=>x+(s.paid||0),0):(py.paidAmount||0))},0);const dB=(m.divisions||DIVS).map(d=>{const it=(m.divItems||[]).filter(x=>x.divId===d.id);return{name:d.name.replace(/דיביזיה \d+ — /,""),ap:it.reduce((a,i)=>a+((m.approval||{})[i.id]?.approved?(m.approval||{})[i.id].approvedAmount:0),0)}}).filter(d=>d.ap>0);const[y,mo]=k.split("-");return{key:k,label:MH[parseInt(mo)-1],gross:m.grossIncome,approved:tA,paid:tP,pending:tA-tP,pct:m.grossIncome>0?Math.round(tA/m.grossIncome*100):0,dB}}).filter(Boolean);
+        const cM=moD.find(m=>m.key===mkey)||moD[moD.length-1];
+        if(!moD.length)return h("div",{style:{textAlign:"center",padding:"40px",color:C.txd}},"אין נתונים עדיין.");
+        const bCfg={type:"bar",data:{labels:moD.map(m=>m.label),datasets:[{label:"ברוטו",data:moD.map(m=>m.gross),backgroundColor:"#2563eb33",borderColor:"#2563eb",borderWidth:2},{label:"מאושר",data:moD.map(m=>m.approved),backgroundColor:"#7c3aed33",borderColor:"#7c3aed",borderWidth:2},{label:"שולם",data:moD.map(m=>m.paid),backgroundColor:"#0891b233",borderColor:"#0891b2",borderWidth:2}]},options:{responsive:true,plugins:{legend:{position:"top",rtl:true}},scales:{x:{ticks:{color:C.txd}},y:{ticks:{color:C.txd}}}}};
+        const lCfg={type:"line",data:{labels:moD.map(m=>m.label),datasets:[{label:"% ניצול",data:moD.map(m=>m.pct),borderColor:"#d97706",backgroundColor:"#d9770622",fill:true,tension:0.3,pointRadius:5,pointBackgroundColor:"#d97706"}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:C.txd}},y:{min:0,max:100,ticks:{color:C.txd,callback:function(v){return v+"%"}}}}}};
+        const dD=cM?.dB||[];const dC=["#2563eb","#7c3aed","#059669","#d97706","#dc2626","#0891b2","#db2777"];
+        const pCfg=dD.length?{type:"doughnut",data:{labels:dD.map(d=>d.name),datasets:[{data:dD.map(d=>d.ap),backgroundColor:dC.slice(0,dD.length),borderWidth:0}]},options:{responsive:true,plugins:{legend:{position:"bottom",rtl:true,labels:{font:{size:11},padding:8}}}}}:null;
+        return h("div",null,h("div",{style:{background:C.card,borderRadius:"11px",border:"1px solid "+C.bdr,padding:"16px",marginBottom:"10px"}},h("h2",{style:{margin:"0 0 4px",fontSize:"15px"}},"📈 דשבורד"),h("p",{style:{margin:0,fontSize:"11px",color:C.txd}},moD.length+" חודשים")),
+          h("div",{style:{background:C.card,borderRadius:"11px",border:"1px solid "+C.bdr,padding:"16px",marginBottom:"10px"}},h("h3",{style:{margin:"0 0 10px",fontSize:"14px",color:"#1a1d23"}},"השוואה חודשית"),h(CC,{cfg:bCfg,ht:"280px"})),
+          h("div",{style:{background:C.card,borderRadius:"11px",border:"1px solid "+C.bdr,padding:"16px",marginBottom:"10px"}},h("h3",{style:{margin:"0 0 10px",fontSize:"14px",color:"#1a1d23"}},"ניצול תקציב (%)"),h(CC,{cfg:lCfg,ht:"220px"})),
+          pCfg&&h("div",{style:{background:C.card,borderRadius:"11px",border:"1px solid "+C.bdr,padding:"16px",marginBottom:"10px"}},h("h3",{style:{margin:"0 0 10px",fontSize:"14px",color:"#1a1d23"}},"דיביזיות"+(cM?" — "+cM.label:"")),h(CC,{cfg:pCfg,ht:"220px"})),
+          moD.length>1&&h("div",{style:{background:C.card,borderRadius:"11px",border:"1px solid "+C.bdr,padding:"16px"}},h("h3",{style:{margin:"0 0 10px",fontSize:"14px",color:"#1a1d23"}},"\u05d8\u05d1\u05dc\u05ea \u05e1\u05d9\u05db\u05d5\u05dd"),h("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:"12px"}},h("thead",null,h("tr",null,["\u05d7\u05d5\u05d3\u05e9","\u05d1\u05e8\u05d5\u05d8\u05d5","\u05de\u05d0\u05d5\u05e9\u05e8","\u05e9\u05d5\u05dc\u05dd","\u05de\u05de\u05ea\u05d9\u05df","%"].map(function(t,i){return h("th",{key:i,style:{padding:"6px 10px",borderBottom:"2px solid "+C.bdr,textAlign:i?"center":"right",color:C.txd}},t)}))),h("tbody",null,moD.map(function(m){return h("tr",{key:m.key},h("td",{style:{padding:"5px 10px",borderBottom:"1px solid "+C.bdr}},m.label),h("td",{style:{padding:"5px 10px",borderBottom:"1px solid "+C.bdr,textAlign:"center",fontFamily:"'JetBrains Mono',monospace",color:C.blue}},fmt(m.gross,cur)),h("td",{style:{padding:"5px 10px",borderBottom:"1px solid "+C.bdr,textAlign:"center",fontFamily:"'JetBrains Mono',monospace",color:C.purple}},fmt(m.approved,cur)),h("td",{style:{padding:"5px 10px",borderBottom:"1px solid "+C.bdr,textAlign:"center",fontFamily:"'JetBrains Mono',monospace",color:C.cyan}},fmt(m.paid,cur)),h("td",{style:{padding:"5px 10px",borderBottom:"1px solid "+C.bdr,textAlign:"center",fontFamily:"'JetBrains Mono',monospace",color:C.amber}},fmt(m.pending,cur)),h("td",{style:{padding:"5px 10px",borderBottom:"1px solid "+C.bdr,textAlign:"center",fontWeight:600,color:m.pct>90?C.red:m.pct>70?C.amber:C.green}},m.pct+"%"))})))))})()
+    ),
+
+    // Reset modal
+    showRst&&h("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000},onClick:()=>setShowRst(false)},h("div",{onClick:e=>e.stopPropagation(),style:{background:C.card,borderRadius:"14px",padding:"22px",border:"1px solid "+C.bdr,maxWidth:320,width:"90%",textAlign:"center"}},h("div",{style:{fontSize:"24px",marginBottom:"6px"}},"⚠️"),h("h3",{style:{margin:"0 0 4px",fontSize:"13px"}},"איפוס "+MH[selM]+"?"),h("p",{style:{color:C.txd,fontSize:"11px",margin:"0 0 14px"}},"רק החודש הנוכחי."),h("div",{style:{display:"flex",gap:"8px",justifyContent:"center"}},h("button",{onClick:()=>setShowRst(false),style:{background:C.bg,border:"1px solid "+C.bdr,color:C.txd,padding:"6px 14px",borderRadius:"6px",cursor:"pointer",fontSize:"11px",fontFamily:"inherit"}},"ביטול"),h("button",{onClick:rstMo,style:{background:C.red,border:"none",color:"#fff",padding:"6px 14px",borderRadius:"6px",cursor:"pointer",fontSize:"11px",fontFamily:"inherit",fontWeight:600}},"אפס"))))
   );
-
-  if (filtered.length === 0) {
-    list.innerHTML = `<div id="no-biz"><h3>${businesses.length ? 'No results' : 'No businesses yet'}</h3>
-      <p style="font-size:12px">Click "Add Business" to get started</p></div>`;
-    return;
-  }
-
-  list.innerHTML = filtered.map(b => `
-    <div class="biz-item ${b.id === activeBizId ? 'active' : ''}" onclick="selectBusiness(${b.id})">
-      <div class="biz-icon">${b.name.charAt(0)}</div>
-      <div style="overflow:hidden">
-        <div class="biz-name">${b.name}</div>
-        <div class="biz-addr">${b.address}</div>
-      </div>
-    </div>`).join('');
 }
-
-function filterBusinesses(val) { renderBusinessList(val); }
-
-// ── Select Business ────────────────────────────────────────────────────────────
-async function selectBusiness(id) {
-  activeBizId = id;
-  renderBusinessList();
-  const biz = businesses.find(b => b.id === id);
-  document.getElementById('topbar-title').textContent = biz.name;
-  document.getElementById('btn-scan-now').style.display = 'inline-block';
-  showView('map');
-
-  // מרכז המפה על העסק
-  map.setView([biz.lat, biz.lng], 12);
-
-  // הצג את הסריקה האחרונה אם קיימת
-  const r = await fetch(`/api/scans?business_id=${id}`);
-  const scans = await r.json();
-  if (scans.length > 0) {
-    loadScanHeatmap(scans[0].id);
-  } else {
-    clearHeatmap();
-    document.getElementById('scan-info').style.display = 'none';
-  }
-}
-
-// ── Views ──────────────────────────────────────────────────────────────────────
-function showView(view) {
-  document.getElementById('map').style.display      = view === 'map'   ? 'block' : 'none';
-  document.getElementById('scans-view').style.display = view === 'scans' ? 'block' : 'none';
-  document.getElementById('scan-info').style.display  = view === 'map'   ? '' : 'none';
-  document.getElementById('legend').style.display     = view === 'map'   ? '' : 'none';
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById(`nav-${view === 'scans' ? 'scans' : 'map'}`).classList.add('active');
-
-  if (view === 'scans') loadScansTable();
-  if (view === 'map') setTimeout(() => map.invalidateSize(), 50);
-}
-
-// ── Scans Table ────────────────────────────────────────────────────────────────
-async function loadScansTable() {
-  const r = await fetch('/api/scans');
-  const scans = await r.json();
-  const tbody = document.getElementById('scans-tbody');
-  if (scans.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#64748b">No scans yet</td></tr>';
-    return;
-  }
-  tbody.innerHTML = scans.map((s, i) => {
-    const running = s.status.startsWith('running');
-    const badge = running
-      ? `<span class="badge badge-running"><span class="spinner"></span> Running</span>`
-      : s.status === 'done' ? `<span class="badge badge-success">✓ Done</span>`
-      : `<span class="badge badge-error">Error</span>`;
-    const scoreColor = s.avg_rank ? rankColor(s.avg_rank) : '#64748b';
-    return `<tr>
-      <td style="color:#64748b">${i+1}</td>
-      <td>${s.business_name}</td>
-      <td style="color:#a5b4fc">${s.keyword}</td>
-      <td><span class="rank-score" style="color:${scoreColor}">${s.avg_rank || '—'}</span></td>
-      <td style="color:#64748b">${s.grid_size}×${s.grid_size} · ${s.spacing_km}km</td>
-      <td>${badge}</td>
-      <td style="color:#64748b;font-size:11px">${s.created_at ? s.created_at.slice(0,16) : '—'}</td>
-      <td>
-        <button class="btn-view" onclick="viewScan(${s.id})">View Map</button>
-        <button class="btn-view" style="margin-left:4px;color:#ef4444" onclick="deleteScan(${s.id})">✕</button>
-      </td>
-    </tr>`;
-  }).join('');
-}
-
-async function viewScan(scanId) {
-  showView('map');
-  await loadScanHeatmap(scanId);
-}
-
-async function deleteScan(scanId) {
-  if (!confirm('Delete this scan?')) return;
-  await fetch(`/api/scans/${scanId}`, { method: 'DELETE' });
-  loadScansTable();
-}
-
-// ── Heatmap ────────────────────────────────────────────────────────────────────
-function clearHeatmap() {
-  scanMarkers.forEach(m => map.removeLayer(m));
-  scanMarkers = [];
-}
-
-async function loadScanHeatmap(scanId) {
-  clearHeatmap();
-  currentScanId = scanId;
-
-  const [scanR, resultsR] = await Promise.all([
-    fetch(`/api/scans/${scanId}`),
-    fetch(`/api/scans/${scanId}/results`)
-  ]);
-  const scan = await scanR.json();
-  const results = await resultsR.json();
-
-  // עדכן info card
-  const si = document.getElementById('scan-info');
-  si.style.display = 'block';
-  document.getElementById('si-business').textContent = scan.business_name;
-  document.getElementById('si-keyword').textContent  = scan.keyword;
-  document.getElementById('si-grid').textContent     = `${scan.grid_size}×${scan.grid_size} · ${scan.spacing_km}km`;
-  document.getElementById('si-date').textContent     = scan.created_at ? scan.created_at.slice(0,16) : '—';
-  const scoreEl = document.getElementById('si-score');
-  if (scan.avg_rank) {
-    scoreEl.textContent = scan.avg_rank;
-    scoreEl.style.color = rankColor(scan.avg_rank);
-  } else {
-    scoreEl.textContent = '…';
-    scoreEl.style.color = '#64748b';
-  }
-
-  // ציור נקודות על המפה
-  results.forEach(pt => {
-    const color = rankColor(pt.rank);
-    const m = L.circleMarker([pt.lat, pt.lng], {
-      radius: 18,
-      fillColor: color,
-      fillOpacity: 0.85,
-      color: 'rgba(0,0,0,0.3)',
-      weight: 1
-    }).addTo(map);
-
-    // מספר בתוך העיגול
-    const icon = L.divIcon({
-      html: `<div style="color:white;font-weight:700;font-size:11px;text-align:center;
-                          line-height:22px;width:22px;pointer-events:none">
-               ${pt.rank === 20 ? '—' : pt.rank}
-             </div>`,
-      className: '',
-      iconSize: [22, 22],
-      iconAnchor: [11, 11]
-    });
-    const label = L.marker([pt.lat, pt.lng], { icon, interactive: false }).addTo(map);
-
-    m.bindTooltip(`Rank #${pt.rank === 20 ? 'Not found' : pt.rank}`, {
-      className: 'rank-tooltip', direction: 'top'
-    });
-
-    scanMarkers.push(m, label);
-  });
-
-  // אם עדיין רץ - poll
-  if (scan.status.startsWith('running')) {
-    startPolling(scanId);
-  }
-}
-
-// ── Polling ────────────────────────────────────────────────────────────────────
-function startPolling(scanId) {
-  if (pollInterval) clearInterval(pollInterval);
-  document.getElementById('progress-bar').style.display = 'block';
-
-  pollInterval = setInterval(async () => {
-    const r = await fetch(`/api/scans/${scanId}`);
-    const scan = await r.json();
-
-    // עדכן progress
-    if (scan.status.startsWith('running:')) {
-      const parts = scan.status.split(':')[1].split('/');
-      const done = parseInt(parts[0]), total = parseInt(parts[1]);
-      const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-      document.getElementById('progress-fill').style.width = pct + '%';
-      document.getElementById('progress-label').textContent =
-        `Scanning… ${done}/${total} points completed`;
-    }
-
-    if (scan.status === 'done' || scan.status === 'error') {
-      clearInterval(pollInterval);
-      pollInterval = null;
-      document.getElementById('progress-bar').style.display = 'none';
-      loadScanHeatmap(scanId);
-    } else {
-      // טען נקודות חדשות שהתווספו
-      await loadScanHeatmap(scanId);
-    }
-  }, 8000);
-}
-
-// ── Add Business Modal ─────────────────────────────────────────────────────────
-// ── Maps URL Parser ───────────────────────────────────────────────────────────
-let urlDebounceTimer = null;
-let parsedCoords = null;
-
-function debounceUrl(val) {
-  clearTimeout(urlDebounceTimer);
-  if (!val.trim()) { document.getElementById('maps-url-status').textContent = ''; parsedCoords = null; return; }
-  document.getElementById('maps-url-status').textContent = '🔍 מחפש קורדינטות...';
-  urlDebounceTimer = setTimeout(() => parseMapsUrl(val), 800);
-}
-
-async function parseMapsUrl(url) {
-  if (!url.trim()) return;
-  try {
-    const r = await fetch('/api/parse-maps-url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url })
-    });
-    const data = await r.json();
-    const status = document.getElementById('maps-url-status');
-    if (data.lat) {
-      parsedCoords = { lat: data.lat, lng: data.lng };
-      status.textContent = '✅ נמצא: ' + data.lat.toFixed(4) + ', ' + data.lng.toFixed(4);
-      status.style.color = '#4ade80';
-      if (data.name && !document.getElementById('biz-name').value) {
-        document.getElementById('biz-name').value = data.name;
-      }
-    } else {
-      // ניסיון שני עם פלייוורייט
-      status.textContent = '🔄 פותח בדפדפן...';
-      status.style.color = '#f0ad4e';
-      const r2 = await fetch('/api/parse-maps-url-browser', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      });
-      const data2 = await r2.json();
-      if (data2.lat) {
-        parsedCoords = { lat: data2.lat, lng: data2.lng };
-        status.textContent = '✅ נמצא: ' + data2.lat.toFixed(4) + ', ' + data2.lng.toFixed(4);
-        status.style.color = '#4ade80';
-        if (data2.name && !document.getElementById('biz-name').value) {
-          document.getElementById('biz-name').value = data2.name;
-        }
-      } else {
-        parsedCoords = null;
-        status.textContent = '⚠️ ' + (data2.error || 'לא נמצאו קורדינטות');
-        status.style.color = '#f87171';
-      }
-    }
-  } catch(e) {
-    parsedCoords = null;
-    document.getElementById('maps-url-status').textContent = '❌ שגיאה: ' + e.message;
-  }
-}
-
-function openAddBusinessModal() {
-  keywords = [];
-  parsedCoords = null;
-  document.getElementById('biz-maps-url').value = '';
-  document.getElementById('maps-url-status').textContent = '';
-  document.getElementById('biz-name').value = '';
-  document.getElementById('biz-addr').value = '';
-  document.getElementById('kw-input').value = '';
-  document.getElementById('kw-tags').innerHTML = '';
-  document.getElementById('modal-add-biz').classList.add('open');
-}
-
-function addKeywordTag(e) {
-  if (e.key !== 'Enter') return;
-  const val = e.target.value.trim();
-  if (!val) return;
-  keywords.push(val);
-  e.target.value = '';
-  renderKwTags();
-}
-
-function removeKeyword(i) {
-  keywords.splice(i, 1);
-  renderKwTags();
-}
-
-function renderKwTags() {
-  document.getElementById('kw-tags').innerHTML = keywords.map((k, i) =>
-    `<span class="tag">${k}<button onclick="removeKeyword(${i})">×</button></span>`
-  ).join('');
-}
-
-async function submitAddBusiness() {
-  const name = document.getElementById('biz-name').value.trim();
-  const addr = document.getElementById('biz-addr').value.trim();
-  if (!name || !addr) { alert('Please fill in name and address'); return; }
-
-  const btn = document.querySelector('#modal-add-biz .btn-submit');
-  btn.textContent = 'Geocoding…'; btn.disabled = true;
-
-  const payload = { name, address: addr, keywords };
-  if (parsedCoords) { payload.lat = parsedCoords.lat; payload.lng = parsedCoords.lng; }
-  const r = await fetch('/api/businesses', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  const data = await r.json();
-  btn.textContent = 'Add Business'; btn.disabled = false;
-
-  if (data.error) { alert(data.error); return; }
-  closeModal('modal-add-biz');
-  await loadBusinesses();
-  selectBusiness(data.id);
-}
-
-// ── New Scan Modal ─────────────────────────────────────────────────────────────
-function openNewScanModal() {
-  // מלא את רשימת העסקים
-  const sel = document.getElementById('scan-biz-sel');
-  sel.innerHTML = businesses.map(b =>
-    `<option value="${b.id}" ${b.id === activeBizId ? 'selected' : ''}>${b.name}</option>`
-  ).join('');
-
-  // הצג מילות מפתח מוצעות
-  updateSuggestedKws();
-  sel.onchange = updateSuggestedKws;
-  document.getElementById('scan-keyword').value = '';
-  document.getElementById('modal-new-scan').classList.add('open');
-}
-
-function updateSuggestedKws() {
-  const sel = document.getElementById('scan-biz-sel');
-  const biz = businesses.find(b => b.id == sel.value);
-  const container = document.getElementById('suggested-kws');
-  if (!biz || !biz.keywords || biz.keywords.length === 0) {
-    container.innerHTML = '';
-    return;
-  }
-  container.innerHTML = biz.keywords.map(k =>
-    `<span class="tag" style="cursor:pointer" onclick="document.getElementById('scan-keyword').value='${k}'">${k}</span>`
-  ).join('');
-}
-
-async function submitNewScan() {
-  const bizId = parseInt(document.getElementById('scan-biz-sel').value);
-  const keyword = document.getElementById('scan-keyword').value.trim();
-  const gridSize = parseInt(document.getElementById('scan-grid').value);
-  const spacing = parseFloat(document.getElementById('scan-spacing').value);
-
-  if (!keyword) { alert('Please enter a keyword'); return; }
-
-  const btn = document.querySelector('#modal-new-scan .btn-submit');
-  btn.textContent = 'Starting…'; btn.disabled = true;
-
-  const r = await fetch('/api/scans', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ business_id: bizId, keyword, grid_size: gridSize, spacing_km: spacing })
-  });
-  const data = await r.json();
-  btn.textContent = 'Start Scan ▶'; btn.disabled = false;
-
-  if (data.error) { alert(data.error); return; }
-
-  closeModal('modal-new-scan');
-  showView('map');
-  activeBizId = bizId;
-  renderBusinessList();
-
-  const biz = businesses.find(b => b.id === bizId);
-  if (biz) {
-    document.getElementById('topbar-title').textContent = biz.name;
-    map.setView([biz.lat, biz.lng], 12);
-  }
-
-  // התחל לעקוב אחרי הסריקה
-  startPolling(data.scan_id);
-  loadScanHeatmap(data.scan_id);
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function closeModal(id) {
-  document.getElementById(id).classList.remove('open');
-}
-
-// סגור modal בלחיצה מחוצה
-document.querySelectorAll('.modal-bg').forEach(bg => {
-  bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('open'); });
-});
-
-// ── Init ───────────────────────────────────────────────────────────────────────
-loadBusinesses();
+ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 </script>
 </body>
 </html>
