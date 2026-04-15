@@ -40,6 +40,17 @@ CREATE TABLE IF NOT EXISTS scan_results (
     grid_col INTEGER,
     rank INTEGER DEFAULT 20
 );
+
+CREATE TABLE IF NOT EXISTS scan_result_businesses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scan_result_id INTEGER REFERENCES scan_results(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    name TEXT,
+    address TEXT,
+    rating REAL,
+    reviews INTEGER,
+    place_url TEXT
+);
 """
 
 def get_db():

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<\!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -156,24 +156,94 @@
     z-index: 50;
   }
 
-  /* ── SCAN INFO CARD ── */
+  /* ── SCAN INFO CARD (Enhanced) ── */
   #scan-info {
     position: absolute; top: 62px; left: 10px;
     background: #1a1d2e; border: 1px solid #2d3154;
-    border-radius: 12px; padding: 14px 16px; min-width: 220px;
+    border-radius: 12px; padding: 16px; min-width: 320px; max-width: 360px;
     z-index: 400; display: none;
     box-shadow: 0 4px 20px rgba(0,0,0,.4);
   }
-  #scan-info h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  #scan-info h3 { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: #e2e8f0; }
   .info-row { display: flex; justify-content: space-between;
-              font-size: 12px; margin-bottom: 4px; }
+              font-size: 12px; margin-bottom: 8px; }
   .info-label { color: #64748b; }
   .info-val { color: #e2e8f0; font-weight: 500; }
   .avg-score {
-    font-size: 28px; font-weight: 800; text-align: center;
-    margin: 10px 0 4px;
+    font-size: 36px; font-weight: 800; text-align: center;
+    margin: 12px 0 4px;
   }
-  .avg-label { font-size: 11px; color: #64748b; text-align: center; }
+  .avg-label { font-size: 11px; color: #64748b; text-align: center; margin-bottom: 14px; }
+
+  /* Distribution bar chart */
+  .dist-section { margin-top: 14px; border-top: 1px solid #2d3154; padding-top: 12px; }
+  .dist-title { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase;
+                margin-bottom: 8px; }
+  .dist-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11px; }
+  .dist-label { color: #64748b; min-width: 80px; }
+  .dist-fill { height: 20px; background: #2d3154; border-radius: 4px; flex: 1; position: relative;
+               overflow: hidden; }
+  .dist-progress { height: 100%; border-radius: 4px; transition: width .3s; display: flex;
+                   align-items: center; justify-content: flex-end; padding-right: 6px;
+                   color: white; font-size: 10px; font-weight: 700; }
+  .dist-excellent { background: #1a9c3e; }
+  .dist-good { background: #5cb85c; }
+  .dist-medium { background: #f0ad4e; }
+  .dist-weak { background: #e67e22; }
+  .dist-poor { background: #e74c3c; }
+  .dist-notfound { background: #8e1a0e; }
+
+  /* ── BUSINESS PANEL (Right side) ── */
+  .biz-panel {
+    position: absolute; right: 0; top: 62px; width: 380px; max-height: calc(100vh - 114px);
+    background: #1a1d2e; border-left: 1px solid #2d3154;
+    border-radius: 12px 0 0 0; z-index: 350; display: none;
+    box-shadow: -4px 4px 20px rgba(0,0,0,.4);
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .biz-panel.open { display: flex; }
+  .biz-panel-header {
+    padding: 16px; border-bottom: 1px solid #2d3154;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-shrink: 0;
+  }
+  .biz-panel-header h4 { font-size: 13px; font-weight: 600; color: #e2e8f0; }
+  .biz-panel-close {
+    background: none; border: none; color: #94a3b8; cursor: pointer;
+    font-size: 18px; padding: 0; width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .biz-panel-close:hover { color: #e2e8f0; }
+  .biz-panel-content {
+    flex: 1; overflow-y: auto; padding: 12px;
+  }
+  .biz-card {
+    background: #252849; border: 1px solid #3d4172; border-radius: 8px;
+    padding: 12px; margin-bottom: 10px; transition: all .15s;
+  }
+  .biz-card:hover { background: #2d3154; border-color: #6366f1; }
+  .biz-card.highlighted {
+    border: 2px solid #a78bfa; background: #312e81;
+  }
+  .biz-card-position {
+    font-size: 11px; color: #64748b; font-weight: 600; margin-bottom: 4px;
+  }
+  .biz-card-name {
+    font-size: 13px; font-weight: 700; color: #e2e8f0; margin-bottom: 6px;
+  }
+  .biz-card-addr {
+    font-size: 11px; color: #94a3b8; line-height: 1.4; margin-bottom: 8px;
+  }
+  .biz-card-meta {
+    display: flex; justify-content: space-between; font-size: 11px;
+    color: #64748b; align-items: center;
+  }
+  .biz-rating {
+    display: flex; gap: 3px; align-items: center;
+  }
+  .star { color: #fbbf24; font-size: 12px; }
+  .biz-reviews { color: #94a3b8; }
 
   /* ── LEGEND ── */
   #legend {
@@ -249,7 +319,7 @@
 </head>
 <body>
 
-<!-- ════════════════════════════════════════════════
+<\!-- ════════════════════════════════════════════════
      SIDEBAR
 ════════════════════════════════════════════════ -->
 <div id="sidebar">
@@ -301,7 +371,7 @@
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════════
+<\!-- ════════════════════════════════════════════════
      MAIN AREA
 ════════════════════════════════════════════════ -->
 <div id="main">
@@ -313,10 +383,10 @@
     <button class="tb-btn tb-btn-ghost" onclick="openAddBusinessModal()">+ Add Business</button>
   </div>
 
-  <!-- Map -->
+  <\!-- Map -->
   <div id="map"></div>
 
-  <!-- Scans Table -->
+  <\!-- Scans Table -->
   <div id="scans-view">
     <table class="scans-table">
       <thead>
@@ -335,17 +405,67 @@
     </table>
   </div>
 
-  <!-- Scan info card -->
+  <\!-- Scan info card (Enhanced with distribution) -->
   <div id="scan-info">
     <h3 id="si-business">—</h3>
     <div class="info-row"><span class="info-label">Keyword</span><span class="info-val" id="si-keyword">—</span></div>
-    <div class="info-row"><span class="info-label">Grid</span><span class="info-val" id="si-grid">—</span></div>
-    <div class="info-row"><span class="info-label">Date</span><span class="info-val" id="si-date">—</span></div>
+    <div class="info-row"><span class="info-label">Address</span><span class="info-val" id="si-address">—</span></div>
     <div class="avg-score" id="si-score">—</div>
-    <div class="avg-label">Average Rank (lower = better)</div>
+    <div class="avg-label">Average Ranking Score (lower = better)</div>
+
+    <div class="dist-section">
+      <div class="dist-title">Ranking Distribution</div>
+      <div class="dist-bar">
+        <div class="dist-label">Excellent</div>
+        <div class="dist-fill">
+          <div class="dist-progress dist-excellent" id="dist-excellent" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="dist-bar">
+        <div class="dist-label">Good</div>
+        <div class="dist-fill">
+          <div class="dist-progress dist-good" id="dist-good" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="dist-bar">
+        <div class="dist-label">Medium</div>
+        <div class="dist-fill">
+          <div class="dist-progress dist-medium" id="dist-medium" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="dist-bar">
+        <div class="dist-label">Weak</div>
+        <div class="dist-fill">
+          <div class="dist-progress dist-weak" id="dist-weak" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="dist-bar">
+        <div class="dist-label">Poor</div>
+        <div class="dist-fill">
+          <div class="dist-progress dist-poor" id="dist-poor" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="dist-bar">
+        <div class="dist-label">Not found</div>
+        <div class="dist-fill">
+          <div class="dist-progress dist-notfound" id="dist-notfound" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <!-- Legend -->
+  <\!-- Business Panel (Right side) -->
+  <div class="biz-panel" id="biz-panel">
+    <div class="biz-panel-header">
+      <h4 id="biz-panel-title">Results</h4>
+      <button class="biz-panel-close" onclick="closeBizPanel()">×</button>
+    </div>
+    <div class="biz-panel-content" id="biz-panel-content">
+      <\!-- Populated dynamically -->
+    </div>
+  </div>
+
+  <\!-- Legend -->
   <div id="legend">
     <h4>Rank Legend</h4>
     <div class="leg-row"><div class="leg-dot" style="background:#1a9c3e"></div><span>#1–3 Top</span></div>
@@ -356,7 +476,7 @@
     <div class="leg-row"><div class="leg-dot" style="background:#8e1a0e"></div><span>#18–20 Not found</span></div>
   </div>
 
-  <!-- Progress bar -->
+  <\!-- Progress bar -->
   <div id="progress-bar">
     <div class="progress-label" id="progress-label">Scanning…</div>
     <div class="progress-track">
@@ -365,7 +485,7 @@
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════════
+<\!-- ════════════════════════════════════════════════
      MODAL: ADD BUSINESS
 ════════════════════════════════════════════════ -->
 <div class="modal-bg" id="modal-add-biz">
@@ -398,7 +518,7 @@
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════════
+<\!-- ════════════════════════════════════════════════
      MODAL: NEW SCAN
 ════════════════════════════════════════════════ -->
 <div class="modal-bg" id="modal-new-scan">
@@ -440,13 +560,14 @@
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════════
+<\!-- ════════════════════════════════════════════════
      JAVASCRIPT
 ════════════════════════════════════════════════ -->
 <script>
 // ── State ──────────────────────────────────────────────────────────────────────
 let map, businesses = [], activeBizId = null, currentScanId = null;
 let scanMarkers = [], pollInterval = null, keywords = [];
+let currentTrackedBusinessId = null;
 
 // ── Map Init ───────────────────────────────────────────────────────────────────
 map = L.map('map', { zoomControl: true }).setView([37.5, -96], 4);
@@ -480,19 +601,11 @@ function renderBusinessList(filter = '') {
   );
 
   if (filtered.length === 0) {
-    list.innerHTML = `<div id="no-biz"><h3>${businesses.length ? 'No results' : 'No businesses yet'}</h3>
-      <p style="font-size:12px">Click "Add Business" to get started</p></div>`;
+    list.innerHTML = '<div id="no-biz"><h3>' + (businesses.length ? 'No results' : 'No businesses yet') + '</h3><p style="font-size:12px">Click "Add Business" to get started</p></div>';
     return;
   }
 
-  list.innerHTML = filtered.map(b => `
-    <div class="biz-item ${b.id === activeBizId ? 'active' : ''}" onclick="selectBusiness(${b.id})">
-      <div class="biz-icon">${b.name.charAt(0)}</div>
-      <div style="overflow:hidden">
-        <div class="biz-name">${b.name}</div>
-        <div class="biz-addr">${b.address}</div>
-      </div>
-    </div>`).join('');
+  list.innerHTML = filtered.map(b => '<div class="biz-item ' + (b.id === activeBizId ? 'active' : '') + '" onclick="selectBusiness(' + b.id + ')"><div class="biz-icon">' + b.name.charAt(0) + '</div><div style="overflow:hidden"><div class="biz-name">' + b.name + '</div><div class="biz-addr">' + b.address + '</div></div></div>').join('');
 }
 
 function filterBusinesses(val) { renderBusinessList(val); }
@@ -500,17 +613,16 @@ function filterBusinesses(val) { renderBusinessList(val); }
 // ── Select Business ────────────────────────────────────────────────────────────
 async function selectBusiness(id) {
   activeBizId = id;
+  currentTrackedBusinessId = id;
   renderBusinessList();
   const biz = businesses.find(b => b.id === id);
   document.getElementById('topbar-title').textContent = biz.name;
   document.getElementById('btn-scan-now').style.display = 'inline-block';
   showView('map');
 
-  // מרכז המפה על העסק
   map.setView([biz.lat, biz.lng], 12);
 
-  // הצג את הסריקה האחרונה אם קיימת
-  const r = await fetch(`/api/scans?business_id=${id}`);
+  const r = await fetch('/api/scans?business_id=' + id);
   const scans = await r.json();
   if (scans.length > 0) {
     loadScanHeatmap(scans[0].id);
@@ -527,7 +639,7 @@ function showView(view) {
   document.getElementById('scan-info').style.display  = view === 'map'   ? '' : 'none';
   document.getElementById('legend').style.display     = view === 'map'   ? '' : 'none';
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById(`nav-${view === 'scans' ? 'scans' : 'map'}`).classList.add('active');
+  document.getElementById('nav-' + (view === 'scans' ? 'scans' : 'map')).classList.add('active');
 
   if (view === 'scans') loadScansTable();
   if (view === 'map') setTimeout(() => map.invalidateSize(), 50);
@@ -544,24 +656,9 @@ async function loadScansTable() {
   }
   tbody.innerHTML = scans.map((s, i) => {
     const running = s.status.startsWith('running');
-    const badge = running
-      ? `<span class="badge badge-running"><span class="spinner"></span> Running</span>`
-      : s.status === 'done' ? `<span class="badge badge-success">✓ Done</span>`
-      : `<span class="badge badge-error">Error</span>`;
+    const badge = running ? '<span class="badge badge-running"><span class="spinner"></span> Running</span>' : s.status === 'done' ? '<span class="badge badge-success">✓ Done</span>' : '<span class="badge badge-error">Error</span>';
     const scoreColor = s.avg_rank ? rankColor(s.avg_rank) : '#64748b';
-    return `<tr>
-      <td style="color:#64748b">${i+1}</td>
-      <td>${s.business_name}</td>
-      <td style="color:#a5b4fc">${s.keyword}</td>
-      <td><span class="rank-score" style="color:${scoreColor}">${s.avg_rank || '—'}</span></td>
-      <td style="color:#64748b">${s.grid_size}×${s.grid_size} · ${s.spacing_km}km</td>
-      <td>${badge}</td>
-      <td style="color:#64748b;font-size:11px">${s.created_at ? s.created_at.slice(0,16) : '—'}</td>
-      <td>
-        <button class="btn-view" onclick="viewScan(${s.id})">View Map</button>
-        <button class="btn-view" style="margin-left:4px;color:#ef4444" onclick="deleteScan(${s.id})">✕</button>
-      </td>
-    </tr>`;
+    return '<tr><td style="color:#64748b">' + (i+1) + '</td><td>' + s.business_name + '</td><td style="color:#a5b4fc">' + s.keyword + '</td><td><span class="rank-score" style="color:' + scoreColor + '">' + (s.avg_rank || '—') + '</span></td><td style="color:#64748b">' + s.grid_size + '×' + s.grid_size + ' · ' + s.spacing_km + 'km</td><td>' + badge + '</td><td style="color:#64748b;font-size:11px">' + (s.created_at ? s.created_at.slice(0,16) : '—') + '</td><td><button class="btn-view" onclick="viewScan(' + s.id + ')">View Map</button><button class="btn-view" style="margin-left:4px;color:#ef4444" onclick="deleteScan(' + s.id + ')">✕</button></td></tr>';
   }).join('');
 }
 
@@ -571,8 +668,8 @@ async function viewScan(scanId) {
 }
 
 async function deleteScan(scanId) {
-  if (!confirm('Delete this scan?')) return;
-  await fetch(`/api/scans/${scanId}`, { method: 'DELETE' });
+  if (\!confirm('Delete this scan?')) return;
+  await fetch('/api/scans/' + scanId, { method: 'DELETE' });
   loadScansTable();
 }
 
@@ -580,6 +677,7 @@ async function deleteScan(scanId) {
 function clearHeatmap() {
   scanMarkers.forEach(m => map.removeLayer(m));
   scanMarkers = [];
+  closeBizPanel();
 }
 
 async function loadScanHeatmap(scanId) {
@@ -587,29 +685,34 @@ async function loadScanHeatmap(scanId) {
   currentScanId = scanId;
 
   const [scanR, resultsR] = await Promise.all([
-    fetch(`/api/scans/${scanId}`),
-    fetch(`/api/scans/${scanId}/results`)
+    fetch('/api/scans/' + scanId),
+    fetch('/api/scans/' + scanId + '/results')
   ]);
   const scan = await scanR.json();
   const results = await resultsR.json();
 
-  // עדכן info card
   const si = document.getElementById('scan-info');
   si.style.display = 'block';
   document.getElementById('si-business').textContent = scan.business_name;
   document.getElementById('si-keyword').textContent  = scan.keyword;
-  document.getElementById('si-grid').textContent     = `${scan.grid_size}×${scan.grid_size} · ${scan.spacing_km}km`;
-  document.getElementById('si-date').textContent     = scan.created_at ? scan.created_at.slice(0,16) : '—';
+  document.getElementById('si-address').textContent  = scan.business_address || '—';
   const scoreEl = document.getElementById('si-score');
   if (scan.avg_rank) {
-    scoreEl.textContent = scan.avg_rank;
+    scoreEl.textContent = Math.round(scan.avg_rank * 10) / 10;
     scoreEl.style.color = rankColor(scan.avg_rank);
   } else {
-    scoreEl.textContent = '…';
+    scoreEl.textContent = '—';
     scoreEl.style.color = '#64748b';
   }
 
-  // ציור נקודות על המפה
+  try {
+    const distR = await fetch('/api/scans/' + scanId + '/distribution');
+    const dist = await distR.json();
+    renderDistribution(dist);
+  } catch (e) {
+    console.log('Distribution not available:', e);
+  }
+
   results.forEach(pt => {
     const color = rankColor(pt.rank);
     const m = L.circleMarker([pt.lat, pt.lng], {
@@ -620,29 +723,104 @@ async function loadScanHeatmap(scanId) {
       weight: 1
     }).addTo(map);
 
-    // מספר בתוך העיגול
+    m.resultId = pt.id;
+    m.resultLat = pt.lat;
+    m.resultLng = pt.lng;
+    m.keyword = scan.keyword;
+
+    m.on('click', function() {
+      showBusinessesForResult(this.resultId, this.keyword, this.resultLat, this.resultLng);
+    });
+
     const icon = L.divIcon({
-      html: `<div style="color:white;font-weight:700;font-size:11px;text-align:center;
-                          line-height:22px;width:22px;pointer-events:none">
-               ${pt.rank === 20 ? '—' : pt.rank}
-             </div>`,
+      html: '<div style="color:white;font-weight:700;font-size:11px;text-align:center;line-height:22px;width:22px;pointer-events:none">' + (pt.rank === 20 ? '—' : pt.rank) + '</div>',
       className: '',
       iconSize: [22, 22],
       iconAnchor: [11, 11]
     });
     const label = L.marker([pt.lat, pt.lng], { icon, interactive: false }).addTo(map);
 
-    m.bindTooltip(`Rank #${pt.rank === 20 ? 'Not found' : pt.rank}`, {
+    m.bindTooltip('Rank #' + (pt.rank === 20 ? 'Not found' : pt.rank), {
       className: 'rank-tooltip', direction: 'top'
     });
 
     scanMarkers.push(m, label);
   });
 
-  // אם עדיין רץ - poll
   if (scan.status.startsWith('running')) {
     startPolling(scanId);
   }
+}
+
+// ── Render Distribution Chart ──────────────────────────────────────────────────
+function renderDistribution(dist) {
+  const total = dist.total || 1;
+  const categories = [
+    { key: 'excellent' },
+    { key: 'good' },
+    { key: 'medium' },
+    { key: 'weak' },
+    { key: 'poor' },
+    { key: 'not_found' }
+  ];
+
+  categories.forEach(cat => {
+    const count = dist[cat.key] || 0;
+    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+    const el = document.getElementById('dist-' + cat.key);
+    if (el) {
+      el.style.width = pct + '%';
+      el.textContent = pct > 5 ? pct + '%' : '';
+    }
+  });
+}
+
+// ── Show Businesses for Result ─────────────────────────────────────────────────
+async function showBusinessesForResult(resultId, keyword, lat, lng) {
+  try {
+    const r = await fetch('/api/scan-results/' + resultId + '/businesses');
+    const bizList = await r.json();
+
+    const panel = document.getElementById('biz-panel');
+    const title = document.getElementById('biz-panel-title');
+    const content = document.getElementById('biz-panel-content');
+
+    title.textContent = 'Results for "' + keyword + '" (Google Maps)';
+
+    let html = '<div style="font-size:11px;color:#64748b;margin-bottom:10px">Coordinates: ' + lat.toFixed(4) + ', ' + lng.toFixed(4) + '</div>';
+
+    if (\!bizList || bizList.length === 0) {
+      html += '<div style="color:#64748b;text-align:center;padding:20px">No businesses found</div>';
+    } else {
+      bizList.slice(0, 5).forEach((biz, idx) => {
+        const isHighlighted = biz.id === currentTrackedBusinessId;
+        const highlightClass = isHighlighted ? ' highlighted' : '';
+        const stars = renderStars(biz.rating);
+        const reviewsText = biz.reviews ? biz.reviews + ' reviews' : 'No reviews';
+
+        html += '<div class="biz-card' + highlightClass + '"><div class="biz-card-position">#' + (idx + 1) + '</div><div class="biz-card-name">' + biz.name + '</div><div class="biz-card-addr">' + biz.address + '</div><div class="biz-card-meta"><div class="biz-rating">' + stars + ' <span style="margin-left:4px">' + (biz.rating || '—') + '</span></div><div class="biz-reviews">' + reviewsText + '</div></div></div>';
+      });
+    }
+
+    content.innerHTML = html;
+    panel.classList.add('open');
+  } catch (e) {
+    console.error('Error fetching businesses:', e);
+  }
+}
+
+function renderStars(rating) {
+  if (\!rating) return '<span style="color:#64748b">—</span>';
+  const fullStars = Math.floor(rating);
+  const hasHalf = rating % 1 >= 0.5;
+  let stars = '';
+  for (let i = 0; i < fullStars; i++) stars += '<span class="star">★</span>';
+  if (hasHalf) stars += '<span class="star" style="opacity:0.6">★</span>';
+  return stars;
+}
+
+function closeBizPanel() {
+  document.getElementById('biz-panel').classList.remove('open');
 }
 
 // ── Polling ────────────────────────────────────────────────────────────────────
@@ -651,17 +829,15 @@ function startPolling(scanId) {
   document.getElementById('progress-bar').style.display = 'block';
 
   pollInterval = setInterval(async () => {
-    const r = await fetch(`/api/scans/${scanId}`);
+    const r = await fetch('/api/scans/' + scanId);
     const scan = await r.json();
 
-    // עדכן progress
     if (scan.status.startsWith('running:')) {
       const parts = scan.status.split(':')[1].split('/');
       const done = parseInt(parts[0]), total = parseInt(parts[1]);
       const pct = total > 0 ? Math.round((done / total) * 100) : 0;
       document.getElementById('progress-fill').style.width = pct + '%';
-      document.getElementById('progress-label').textContent =
-        `Scanning… ${done}/${total} points completed`;
+      document.getElementById('progress-label').textContent = 'Scanning… ' + done + '/' + total + ' points completed';
     }
 
     if (scan.status === 'done' || scan.status === 'error') {
@@ -670,31 +846,29 @@ function startPolling(scanId) {
       document.getElementById('progress-bar').style.display = 'none';
       loadScanHeatmap(scanId);
     } else {
-      // טען נקודות חדשות שהתווספו
       await loadScanHeatmap(scanId);
     }
   }, 8000);
 }
 
 // ── Add Business Modal ─────────────────────────────────────────────────────────
-// ── Maps URL Parser ───────────────────────────────────────────────────────────
 let urlDebounceTimer = null;
 let parsedCoords = null;
 
 function debounceUrl(val) {
   clearTimeout(urlDebounceTimer);
-  if (!val.trim()) {
+  if (\!val.trim()) {
     document.getElementById('maps-url-status').textContent = '';
     parsedCoords = null;
     document.getElementById('addr-group').style.display = '';
     return;
   }
-  document.getElementById('maps-url-status').textContent = '🔍 מחפש קורדינטות...';
+  document.getElementById('maps-url-status').textContent = '🔍 Searching for coordinates...';
   urlDebounceTimer = setTimeout(() => parseMapsUrl(val), 800);
 }
 
 async function parseMapsUrl(url) {
-  if (!url.trim()) return;
+  if (\!url.trim()) return;
   try {
     const r = await fetch('/api/parse-maps-url', {
       method: 'POST',
@@ -705,22 +879,22 @@ async function parseMapsUrl(url) {
     const status = document.getElementById('maps-url-status');
     if (data.lat) {
       parsedCoords = { lat: data.lat, lng: data.lng };
-      status.textContent = '✅ נמצא: ' + data.lat.toFixed(4) + ', ' + data.lng.toFixed(4);
+      status.textContent = '✅ Found: ' + data.lat.toFixed(4) + ', ' + data.lng.toFixed(4);
       status.style.color = '#4ade80';
       document.getElementById('addr-group').style.display = 'none';
-      if (data.name && !document.getElementById('biz-name').value) {
+      if (data.name && \!document.getElementById('biz-name').value) {
         document.getElementById('biz-name').value = data.name;
       }
     } else {
       parsedCoords = null;
       document.getElementById('addr-group').style.display = '';
-      status.textContent = '⚠️ ' + (data.error || 'לא נמצאו קורדינטות');
+      status.textContent = '⚠️ ' + (data.error || 'No coordinates found');
       status.style.color = '#f87171';
     }
   } catch(e) {
     parsedCoords = null;
     document.getElementById('addr-group').style.display = '';
-    document.getElementById('maps-url-status').textContent = '❌ שגיאה: ' + e.message;
+    document.getElementById('maps-url-status').textContent = '❌ Error: ' + e.message;
   }
 }
 
@@ -738,9 +912,9 @@ function openAddBusinessModal() {
 }
 
 function addKeywordTag(e) {
-  if (e.key !== 'Enter') return;
+  if (e.key \!== 'Enter') return;
   const val = e.target.value.trim();
-  if (!val) return;
+  if (\!val) return;
   keywords.push(val);
   e.target.value = '';
   renderKwTags();
@@ -753,15 +927,15 @@ function removeKeyword(i) {
 
 function renderKwTags() {
   document.getElementById('kw-tags').innerHTML = keywords.map((k, i) =>
-    `<span class="tag">${k}<button onclick="removeKeyword(${i})">×</button></span>`
+    '<span class="tag">' + k + '<button onclick="removeKeyword(' + i + ')">×</button></span>'
   ).join('');
 }
 
 async function submitAddBusiness() {
   const name = document.getElementById('biz-name').value.trim();
   const addr = document.getElementById('biz-addr').value.trim();
-  if (!name) { alert('Please fill in business name'); return; }
-  if (!addr && !parsedCoords) { alert('Please provide an address or a Google Maps URL'); return; }
+  if (\!name) { alert('Please fill in business name'); return; }
+  if (\!addr && \!parsedCoords) { alert('Please provide an address or a Google Maps URL'); return; }
 
   const btn = document.querySelector('#modal-add-biz .btn-submit');
   btn.textContent = 'Geocoding…'; btn.disabled = true;
@@ -784,13 +958,11 @@ async function submitAddBusiness() {
 
 // ── New Scan Modal ─────────────────────────────────────────────────────────────
 function openNewScanModal() {
-  // מלא את רשימת העסקים
   const sel = document.getElementById('scan-biz-sel');
   sel.innerHTML = businesses.map(b =>
-    `<option value="${b.id}" ${b.id === activeBizId ? 'selected' : ''}>${b.name}</option>`
+    '<option value="' + b.id + '" ' + (b.id === activeBizId ? 'selected' : '') + '>' + b.name + '</option>'
   ).join('');
 
-  // הצג מילות מפתח מוצעות
   updateSuggestedKws();
   sel.onchange = updateSuggestedKws;
   document.getElementById('scan-keyword').value = '';
@@ -801,12 +973,12 @@ function updateSuggestedKws() {
   const sel = document.getElementById('scan-biz-sel');
   const biz = businesses.find(b => b.id == sel.value);
   const container = document.getElementById('suggested-kws');
-  if (!biz || !biz.keywords || biz.keywords.length === 0) {
+  if (\!biz || \!biz.keywords || biz.keywords.length === 0) {
     container.innerHTML = '';
     return;
   }
   container.innerHTML = biz.keywords.map(k =>
-    `<span class="tag" style="cursor:pointer" onclick="document.getElementById('scan-keyword').value='${k}'">${k}</span>`
+    '<span class="tag" style="cursor:pointer" onclick="document.getElementById(\'scan-keyword\').value=\'' + k + '\'">' + k + '</span>'
   ).join('');
 }
 
@@ -816,7 +988,7 @@ async function submitNewScan() {
   const gridSize = parseInt(document.getElementById('scan-grid').value);
   const spacing = parseFloat(document.getElementById('scan-spacing').value);
 
-  if (!keyword) { alert('Please enter a keyword'); return; }
+  if (\!keyword) { alert('Please enter a keyword'); return; }
 
   const btn = document.querySelector('#modal-new-scan .btn-submit');
   btn.textContent = 'Starting…'; btn.disabled = true;
@@ -834,6 +1006,7 @@ async function submitNewScan() {
   closeModal('modal-new-scan');
   showView('map');
   activeBizId = bizId;
+  currentTrackedBusinessId = bizId;
   renderBusinessList();
 
   const biz = businesses.find(b => b.id === bizId);
@@ -842,7 +1015,6 @@ async function submitNewScan() {
     map.setView([biz.lat, biz.lng], 12);
   }
 
-  // התחל לעקוב אחרי הסריקה
   startPolling(data.scan_id);
   loadScanHeatmap(data.scan_id);
 }
@@ -852,7 +1024,6 @@ function closeModal(id) {
   document.getElementById(id).classList.remove('open');
 }
 
-// סגור modal בלחיצה מחוצה
 document.querySelectorAll('.modal-bg').forEach(bg => {
   bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('open'); });
 });

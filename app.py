@@ -205,6 +205,47 @@ def get_scan_results(scan_id):
     return jsonify([dict(r) for r in results])
 
 
+@app.route('/api/scan-results/<int:result_id>/businesses', methods=['GET'])
+def get_result_businesses(result_id):
+    db = get_db()
+    businesses = db.execute(
+        'SELECT * FROM scan_result_businesses WHERE scan_result_id=? ORDER BY position',
+        (result_id,)
+    ).fetchall()
+    db.close()
+    return jsonify([dict(b) for b in businesses])
+
+
+@app.route('/api/scans/<int:scan_id>/distribution', methods=['GET'])
+def get_scan_distribution(scan_id):
+    """מחזיר התפלגות דירוגים לסריקה"""
+    db = get_db()
+    results = db.execute(
+        'SELECT rank FROM scan_results WHERE scan_id=?', (scan_id,)
+    ).fetchall()
+    db.close()
+
+    dist = {
+        'excellent': 0,  # 1-3
+        'good': 0,       # 4-7
+        'medium': 0,     # 8-10
+        'weak': 0,       # 11-14
+        'poor': 0,       # 15-17
+        'not_found': 0,  # 18-20
+        'total': len(results)
+    }
+    for r in results:
+        rank = r['rank']
+        if rank <= 3:    dist['excellent'] += 1
+        elif rank <= 7:  dist['good'] += 1
+        elif rank <= 10: dist['medium'] += 1
+        elif rank <= 14: dist['weak'] += 1
+        elif rank <= 17: dist['poor'] += 1
+        else:            dist['not_found'] += 1
+
+    return jsonify(dist)
+
+
 @app.route('/api/scans/<int:scan_id>', methods=['DELETE'])
 def delete_scan(scan_id):
     db = get_db()
