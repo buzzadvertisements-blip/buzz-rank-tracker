@@ -21,7 +21,7 @@ BROWSER_ARGS = [
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     '--single-process',
-    '--window-size=800,600',
+    '--window-size=1280,720',
     '--disable-software-rasterizer',
     '--disable-logging',
     '--disable-default-apps',
@@ -29,7 +29,7 @@ BROWSER_ARGS = [
     '--disable-translate',
     '--disable-sync',
     '--disable-background-networking',
-    '--js-flags=--max-old-space-size=128',
+    '--js-flags=--max-old-space-size=256',
 ]
 
 # כל כמה נקודות לאתחל את הדפדפן לשחרור זיכרון
@@ -230,16 +230,16 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
                     browser = await p.chromium.launch(headless=True, args=BROWSER_ARGS)
                     context = await browser.new_context(
                         user_agent=random.choice(USER_AGENTS),
-                        viewport={'width': 800, 'height': 600},
+                        viewport={'width': 1280, 'height': 720},
                         locale='en-US',
                         timezone_id='America/Denver',
                     )
                     pg = await context.new_page()
                     # חסום תמונות, פונטים, CSS ומשאבים כבדים
-                    await pg.route('**/*.{png,jpg,jpeg,gif,webp,svg,mp4,woff,woff2,css,ico}',
+                    # חסום תמונות ופונטים בלבד — CSS חייב להישאר כדי שגוגל מפות ירנדר
+                    await pg.route('**/*.{png,jpg,jpeg,gif,webp,svg,mp4,woff,woff2}',
                                   lambda route: route.abort())
                     await pg.route('**/recaptcha/**', lambda route: route.abort())
-                    await pg.route('**/analytics**', lambda route: route.abort())
                     return pg
 
                 try:
