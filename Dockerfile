@@ -21,9 +21,10 @@ RUN playwright install chromium
 # העתקת קוד
 COPY . .
 
-# תיקיית נתונים קבועה
+# תיקיית נתונים קבועה (fallback ל-SQLite אם אין DATABASE_URL)
 RUN mkdir -p /data
 ENV DB_PATH=/data/rank_tracker.db
+# אם DATABASE_URL מוגדר (PostgreSQL), הוא ישמש אוטומטית
 
 EXPOSE 8080
 

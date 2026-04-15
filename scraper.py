@@ -244,6 +244,16 @@ def _run_batch_subprocess(keyword, business_name, points):
         return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
 
 
+def _get_rank_value(row):
+    """מחלץ ערך rank משורת DB — תומך גם ב-dict וגם ב-tuple"""
+    if isinstance(row, dict):
+        return row['rank']
+    try:
+        return row['rank']
+    except (TypeError, KeyError):
+        return row[0]
+
+
 def run_scan_sync(scan_id: int, business_name: str, keyword: str,
                   grid_points: list, db_path: str,
                   already_done: int = 0, total_override: int = None):
@@ -253,10 +263,9 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
     already_done: כמה נקודות כבר הושלמו (להמשך סריקה)
     total_override: סה"כ נקודות (כולל שהושלמו) — לחישוב אחוזים
     """
-    import sqlite3
+    from database import get_db
 
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn = get_db()
 
     try:
         total = total_override or len(grid_points)
@@ -279,7 +288,7 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
             all_ranks = conn.execute(
                 "SELECT rank FROM scan_results WHERE scan_id=?", (scan_id,)
             ).fetchall()
-            avg_rank = round(sum(r[0] for r in all_ranks) / len(all_ranks), 1) if all_ranks else 20
+            avg_rank = round(sum(_get_rank_value(r) for r in all_ranks) / len(all_ranks), 1) if all_ranks else 20
             conn.execute(
                 '''UPDATE scans SET status='done', avg_rank=?, completed_at=CURRENT_TIMESTAMP
                    WHERE id=?''', (avg_rank, scan_id))
@@ -328,7 +337,7 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
         all_ranks = conn.execute(
             "SELECT rank FROM scan_results WHERE scan_id=?", (scan_id,)
         ).fetchall()
-        avg_rank = round(sum(r[0] for r in all_ranks) / len(all_ranks), 1) if all_ranks else 20
+        avg_rank = round(sum(_get_rank_value(r) for r in all_ranks) / len(all_ranks), 1) if all_ranks else 20
         conn.execute(
             '''UPDATE scans SET status='done', avg_rank=?, completed_at=CURRENT_TIMESTAMP
                WHERE id=?''', (avg_rank, scan_id))

@@ -4,7 +4,7 @@ import threading
 import os
 import re
 
-from database import init_db, get_db, DB_PATH
+from database import init_db, get_db, DB_PATH, USE_PG, DATABASE_URL
 from grid_utils import generate_grid, geocode_address
 from scraper import run_scan_sync
 
@@ -113,12 +113,20 @@ def index():
 @app.route('/api/businesses', methods=['GET'])
 def get_businesses():
     db = get_db()
-    businesses = db.execute(
-        'SELECT b.*, GROUP_CONCAT(k.keyword, "|||") as keywords_str '
-        'FROM businesses b '
-        'LEFT JOIN keywords k ON k.business_id = b.id '
-        'GROUP BY b.id ORDER BY b.created_at DESC'
-    ).fetchall()
+    if USE_PG:
+        businesses = db.execute(
+            'SELECT b.*, STRING_AGG(k.keyword, \'|||\') as keywords_str '
+            'FROM businesses b '
+            'LEFT JOIN keywords k ON k.business_id = b.id '
+            'GROUP BY b.id ORDER BY b.created_at DESC'
+        ).fetchall()
+    else:
+        businesses = db.execute(
+            'SELECT b.*, GROUP_CONCAT(k.keyword, "|||") as keywords_str '
+            'FROM businesses b '
+            'LEFT JOIN keywords k ON k.business_id = b.id '
+            'GROUP BY b.id ORDER BY b.created_at DESC'
+        ).fetchall()
     result = []
     for b in businesses:
         d = dict(b)
