@@ -3,6 +3,7 @@ import random
 import time
 import re
 import os
+import gc
 
 try:
     from playwright.async_api import async_playwright
@@ -25,7 +26,7 @@ BROWSER_ARGS = [
 ]
 
 # כל כמה נקודות לאתחל את הדפדפן לשחרור זיכרון
-BROWSER_RESTART_EVERY = 10
+BROWSER_RESTART_EVERY = 5
 
 USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -257,6 +258,7 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
                         if points_since_restart >= BROWSER_RESTART_EVERY:
                             print(f"  🔄 Restarting browser (memory cleanup)...")
                             page = await _start_browser()
+                            gc.collect()
                             points_since_restart = 0
                             await asyncio.sleep(1)
 
