@@ -22,14 +22,6 @@ BROWSER_ARGS = [
     '--disable-renderer-backgrounding',
     '--single-process',
     '--window-size=1280,720',
-    '--disable-software-rasterizer',
-    '--disable-logging',
-    '--disable-default-apps',
-    '--no-first-run',
-    '--disable-translate',
-    '--disable-sync',
-    '--disable-background-networking',
-    '--js-flags=--max-old-space-size=256',
 ]
 
 # כל כמה נקודות לאתחל את הדפדפן לשחרור זיכרון
