@@ -668,7 +668,7 @@ async function viewScan(scanId) {
 }
 
 async function deleteScan(scanId) {
-  if (\!confirm('Delete this scan?')) return;
+  if (!confirm('Delete this scan?')) return;
   await fetch('/api/scans/' + scanId, { method: 'DELETE' });
   loadScansTable();
 }
@@ -789,7 +789,7 @@ async function showBusinessesForResult(resultId, keyword, lat, lng) {
 
     let html = '<div style="font-size:11px;color:#64748b;margin-bottom:10px">Coordinates: ' + lat.toFixed(4) + ', ' + lng.toFixed(4) + '</div>';
 
-    if (\!bizList || bizList.length === 0) {
+    if (!bizList || bizList.length === 0) {
       html += '<div style="color:#64748b;text-align:center;padding:20px">No businesses found</div>';
     } else {
       bizList.slice(0, 5).forEach((biz, idx) => {
@@ -810,7 +810,7 @@ async function showBusinessesForResult(resultId, keyword, lat, lng) {
 }
 
 function renderStars(rating) {
-  if (\!rating) return '<span style="color:#64748b">—</span>';
+  if (!rating) return '<span style="color:#64748b">—</span>';
   const fullStars = Math.floor(rating);
   const hasHalf = rating % 1 >= 0.5;
   let stars = '';
@@ -857,7 +857,7 @@ let parsedCoords = null;
 
 function debounceUrl(val) {
   clearTimeout(urlDebounceTimer);
-  if (\!val.trim()) {
+  if (!val.trim()) {
     document.getElementById('maps-url-status').textContent = '';
     parsedCoords = null;
     document.getElementById('addr-group').style.display = '';
@@ -868,7 +868,7 @@ function debounceUrl(val) {
 }
 
 async function parseMapsUrl(url) {
-  if (\!url.trim()) return;
+  if (!url.trim()) return;
   try {
     const r = await fetch('/api/parse-maps-url', {
       method: 'POST',
@@ -882,7 +882,7 @@ async function parseMapsUrl(url) {
       status.textContent = '✅ Found: ' + data.lat.toFixed(4) + ', ' + data.lng.toFixed(4);
       status.style.color = '#4ade80';
       document.getElementById('addr-group').style.display = 'none';
-      if (data.name && \!document.getElementById('biz-name').value) {
+      if (data.name && !document.getElementById('biz-name').value) {
         document.getElementById('biz-name').value = data.name;
       }
     } else {
@@ -912,9 +912,9 @@ function openAddBusinessModal() {
 }
 
 function addKeywordTag(e) {
-  if (e.key \!== 'Enter') return;
+  if (e.key !== 'Enter') return;
   const val = e.target.value.trim();
-  if (\!val) return;
+  if (!val) return;
   keywords.push(val);
   e.target.value = '';
   renderKwTags();
@@ -934,8 +934,8 @@ function renderKwTags() {
 async function submitAddBusiness() {
   const name = document.getElementById('biz-name').value.trim();
   const addr = document.getElementById('biz-addr').value.trim();
-  if (\!name) { alert('Please fill in business name'); return; }
-  if (\!addr && \!parsedCoords) { alert('Please provide an address or a Google Maps URL'); return; }
+  if (!name) { alert('Please fill in business name'); return; }
+  if (!addr && !parsedCoords) { alert('Please provide an address or a Google Maps URL'); return; }
 
   const btn = document.querySelector('#modal-add-biz .btn-submit');
   btn.textContent = 'Geocoding…'; btn.disabled = true;
@@ -973,7 +973,7 @@ function updateSuggestedKws() {
   const sel = document.getElementById('scan-biz-sel');
   const biz = businesses.find(b => b.id == sel.value);
   const container = document.getElementById('suggested-kws');
-  if (\!biz || \!biz.keywords || biz.keywords.length === 0) {
+  if (!biz || !biz.keywords || biz.keywords.length === 0) {
     container.innerHTML = '';
     return;
   }
@@ -988,7 +988,7 @@ async function submitNewScan() {
   const gridSize = parseInt(document.getElementById('scan-grid').value);
   const spacing = parseFloat(document.getElementById('scan-spacing').value);
 
-  if (\!keyword) { alert('Please enter a keyword'); return; }
+  if (!keyword) { alert('Please enter a keyword'); return; }
 
   const btn = document.querySelector('#modal-new-scan .btn-submit');
   btn.textContent = 'Starting…'; btn.disabled = true;
