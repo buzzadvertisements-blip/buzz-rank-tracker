@@ -109,12 +109,21 @@ async def _extract_top_businesses(page, business_name: str, top_n: int = 5):
         if not items_data:
             return 20, []
 
-        # מצא את המיקום של העסק שלנו
+        # מצא את המיקום של העסק שלנו — התאמה מול שם העסק בלבד
         rank = 20
+        business_lower = business_name.lower().strip()
+        # דרוש לפחות 2 מילים תואמות, או כל המילים אם יש רק 1-2
+        min_matches = max(2, (len(name_words) + 1) // 2) if len(name_words) >= 2 else 1
+
         for i, item in enumerate(items_data):
-            text = item.get('_text', '')
-            matches = sum(1 for w in name_words if w in text)
-            if matches >= max(1, len(name_words) // 2):
+            item_name = item.get('name', '').lower().strip()
+            # בדיקה 1: התאמה מדויקת של שם העסק
+            if business_lower in item_name or item_name in business_lower:
+                rank = i + 1
+                break
+            # בדיקה 2: התאמת מילים — מול שם העסק בלבד (לא כל הטקסט)
+            matches = sum(1 for w in name_words if w in item_name)
+            if matches >= min_matches:
                 rank = i + 1
                 break
 
@@ -123,13 +132,18 @@ async def _extract_top_businesses(page, business_name: str, top_n: int = 5):
             all_items = await page.evaluate('''() => {
                 const feed = document.querySelector('div[role="feed"]');
                 if (!feed) return [];
-                return Array.from(feed.children).slice(0, 20)
-                    .map(c => (c.innerText || '').toLowerCase())
-                    .filter(t => t.trim().length > 5);
+                return Array.from(feed.children).slice(0, 20).map(c => {
+                    const nameEl = c.querySelector('a[aria-label]') ||
+                                   c.querySelector('.fontHeadlineSmall');
+                    return nameEl ? (nameEl.getAttribute('aria-label') || nameEl.innerText || '').toLowerCase().trim() : '';
+                }).filter(t => t.length > 0);
             }''')
-            for i, text in enumerate(all_items):
-                matches = sum(1 for w in name_words if w in text)
-                if matches >= max(1, len(name_words) // 2):
+            for i, item_name in enumerate(all_items):
+                if business_lower in item_name or item_name in business_lower:
+                    rank = i + 1
+                    break
+                matches = sum(1 for w in name_words if w in item_name)
+                if matches >= min_matches:
                     rank = i + 1
                     break
 
