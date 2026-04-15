@@ -4,6 +4,9 @@ import time
 import re
 import os
 import gc
+import json
+import sys
+import subprocess
 
 try:
     from playwright.async_api import async_playwright
@@ -25,8 +28,8 @@ BROWSER_ARGS = [
     '--window-size=1280,720',
 ]
 
-# כל כמה נקודות לאתחל את הדפדפן לשחרור זיכרון
-BROWSER_RESTART_EVERY = 5
+# כמה נקודות לעבד בכל תהליך-בן (subprocess)
+BATCH_SIZE = 3
 
 USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -37,13 +40,27 @@ USER_AGENTS = [
 ]
 
 
+def _find_rank(items_data, business_name):
+    """מוצא את הדירוג של העסק שלנו ברשימת התוצאות"""
+    name_words = [w.lower() for w in business_name.split() if len(w) > 2]
+    business_lower = business_name.lower().strip()
+    min_matches = max(2, (len(name_words) + 1) // 2) if len(name_words) >= 2 else 1
+
+    for i, item in enumerate(items_data):
+        item_name = item.get('name', '').lower().strip()
+        if business_lower in item_name or item_name in business_lower:
+            return i + 1
+        matches = sum(1 for w in name_words if w in item_name)
+        if matches >= min_matches:
+            return i + 1
+    return 20
+
+
 async def _extract_top_businesses(page, business_name: str, top_n: int = 5):
     """
     שולף את Top N עסקים מהתוצאות בגוגל מפות.
     מחזיר (rank, businesses_list)
     """
-    name_words = [w.lower() for w in business_name.split() if len(w) > 2]
-
     try:
         await page.wait_for_selector('div[role="feed"]', timeout=12000)
     except:
@@ -99,8 +116,7 @@ async def _extract_top_businesses(page, business_name: str, top_n: int = 5):
                         address: address.substring(0, 150),
                         rating,
                         reviews,
-                        place_url: placeUrl.substring(0, 500),
-                        _text: text.toLowerCase()
+                        place_url: placeUrl.substring(0, 500)
                     });
                 }
             }
@@ -110,25 +126,9 @@ async def _extract_top_businesses(page, business_name: str, top_n: int = 5):
         if not items_data:
             return 20, []
 
-        # מצא את המיקום של העסק שלנו — התאמה מול שם העסק בלבד
-        rank = 20
-        business_lower = business_name.lower().strip()
-        # דרוש לפחות 2 מילים תואמות, או כל המילים אם יש רק 1-2
-        min_matches = max(2, (len(name_words) + 1) // 2) if len(name_words) >= 2 else 1
+        rank = _find_rank(items_data, business_name)
 
-        for i, item in enumerate(items_data):
-            item_name = item.get('name', '').lower().strip()
-            # בדיקה 1: התאמה מדויקת של שם העסק
-            if business_lower in item_name or item_name in business_lower:
-                rank = i + 1
-                break
-            # בדיקה 2: התאמת מילים — מול שם העסק בלבד (לא כל הטקסט)
-            matches = sum(1 for w in name_words if w in item_name)
-            if matches >= min_matches:
-                rank = i + 1
-                break
-
-        # אם לא מצאנו ב-top_n, חפש ב-20 הראשונים
+        # אם לא מצאנו, חפש ב-20 הראשונים
         if rank == 20 and len(items_data) < 20:
             all_items = await page.evaluate('''() => {
                 const feed = document.querySelector('div[role="feed"]');
@@ -136,28 +136,16 @@ async def _extract_top_businesses(page, business_name: str, top_n: int = 5):
                 return Array.from(feed.children).slice(0, 20).map(c => {
                     const nameEl = c.querySelector('a[aria-label]') ||
                                    c.querySelector('.fontHeadlineSmall');
-                    return nameEl ? (nameEl.getAttribute('aria-label') || nameEl.innerText || '').toLowerCase().trim() : '';
-                }).filter(t => t.length > 0);
+                    return {name: nameEl ? (nameEl.getAttribute('aria-label') || nameEl.innerText || '').trim() : ''};
+                }).filter(t => t.name.length > 0);
             }''')
-            for i, item_name in enumerate(all_items):
-                if business_lower in item_name or item_name in business_lower:
-                    rank = i + 1
-                    break
-                matches = sum(1 for w in name_words if w in item_name)
-                if matches >= min_matches:
-                    rank = i + 1
-                    break
+            rank = _find_rank(all_items, business_name)
 
-        # נקה _text ושמור רק top_n
-        businesses = []
-        for item in items_data[:top_n]:
-            item.pop('_text', None)
-            businesses.append(item)
-
+        businesses = items_data[:top_n]
         return rank, businesses
 
     except Exception as e:
-        print(f"  Error parsing results: {e}")
+        print(f"  Error parsing results: {e}", file=sys.stderr)
         return 20, []
 
 
@@ -179,143 +167,201 @@ def _mock_rank():
     return r, mock_biz
 
 
-def run_scan_sync(scan_id: int, business_name: str, keyword: str,
-                  grid_points: list, db_path: str):
+# ── עובד Subprocess — מריץ batch של נקודות בתהליך נפרד ──
+
+async def _run_batch_async(keyword, business_name, points):
+    """מריץ batch של נקודות בדפדפן אחד ומחזיר תוצאות"""
+    results = []
+    keyword_url = '+'.join(keyword.strip().split())
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=BROWSER_ARGS)
+        context = await browser.new_context(
+            user_agent=random.choice(USER_AGENTS),
+            viewport={'width': 1280, 'height': 720},
+            locale='en-US',
+            timezone_id='America/Denver',
+        )
+        page = await context.new_page()
+        await page.route('**/*.{png,jpg,jpeg,gif,webp,svg,mp4,woff,woff2}',
+                        lambda route: route.abort())
+        await page.route('**/recaptcha/**', lambda route: route.abort())
+
+        try:
+            for point in points:
+                url = f"https://www.google.com/maps/search/{keyword_url}/@{point['lat']},{point['lng']},14z?hl=en"
+                try:
+                    await page.goto(url, timeout=25000, wait_until='domcontentloaded')
+                    await asyncio.sleep(random.uniform(1.5, 3.0))
+                    rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
+                except Exception as e:
+                    print(f"  Error at ({point['lat']},{point['lng']}): {e}", file=sys.stderr)
+                    rank, businesses = 20, []
+
+                results.append({
+                    'point': point,
+                    'rank': rank,
+                    'businesses': businesses
+                })
+                await asyncio.sleep(random.uniform(1.5, 3.0))
+        finally:
+            await browser.close()
+
+    return results
+
+
+def _run_batch_subprocess(keyword, business_name, points):
     """
-    מריץ סריקה סדרתית עם דפדפן אחד - יציב ברנדר free tier.
-    שומר כל תוצאה מיד למסד הנתונים.
+    מריץ batch בתהליך-בן נפרד.
+    כל הזיכרון (כולל כרומיום) משתחרר כשהתהליך מסתיים.
+    """
+    batch_input = json.dumps({
+        'keyword': keyword,
+        'business_name': business_name,
+        'points': points
+    })
+
+    try:
+        result = subprocess.run(
+            [sys.executable, os.path.abspath(__file__), '--batch-worker'],
+            input=batch_input,
+            capture_output=True,
+            text=True,
+            timeout=180  # 3 דקות timeout ל-batch
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            return json.loads(result.stdout.strip())
+        else:
+            print(f"  Subprocess error: {result.stderr[:500]}", flush=True)
+            # החזר rank 20 לכל הנקודות
+            return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
+    except subprocess.TimeoutExpired:
+        print(f"  Subprocess timeout for batch of {len(points)} points", flush=True)
+        return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
+    except Exception as e:
+        print(f"  Subprocess failed: {e}", flush=True)
+        return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
+
+
+def run_scan_sync(scan_id: int, business_name: str, keyword: str,
+                  grid_points: list, db_path: str,
+                  already_done: int = 0, total_override: int = None):
+    """
+    מריץ סריקה באמצעות subprocess לכל batch של נקודות.
+    כל batch רץ בתהליך נפרד — הזיכרון משתחרר לחלוטין בין batches.
+    already_done: כמה נקודות כבר הושלמו (להמשך סריקה)
+    total_override: סה"כ נקודות (כולל שהושלמו) — לחישוב אחוזים
     """
     import sqlite3
 
-    async def _run():
-        conn = sqlite3.connect(db_path)
-        conn.execute("PRAGMA foreign_keys = ON")
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys = ON")
 
-        try:
-            total = len(grid_points)
-            print(f"\n🔍 Starting scan #{scan_id}: '{keyword}' for '{business_name}'")
-            print(f"   Grid: {total} points\n")
+    try:
+        total = total_override or len(grid_points)
+        remaining = len(grid_points)
+        print(f"\n🔍 {'Resuming' if already_done else 'Starting'} scan #{scan_id}: '{keyword}' for '{business_name}'")
+        print(f"   Points: {remaining} remaining out of {total}, batch size: {BATCH_SIZE}\n", flush=True)
 
-            if not PLAYWRIGHT_AVAILABLE:
-                # מצב דמו
-                rank_sum = 0
-                completed = 0
-                for point in grid_points:
-                    rank, businesses = _mock_rank()
-                    _save_result(conn, scan_id, point, rank, businesses)
-                    rank_sum += rank
-                    completed += 1
-                    conn.execute("UPDATE scans SET status=? WHERE id=?",
-                                (f'running:{completed}/{total}', scan_id))
-                    conn.commit()
-
-                avg_rank = round(rank_sum / total, 1)
-                conn.execute(
-                    '''UPDATE scans SET status='done', avg_rank=?, completed_at=CURRENT_TIMESTAMP
-                       WHERE id=?''', (avg_rank, scan_id))
-                conn.commit()
-                print(f"\n✅ Scan #{scan_id} done (mock). Avg rank: {avg_rank}")
-                return
-
-            # ── מצב אמיתי - דפדפן עם ריסטרט תקופתי לשחרור זיכרון ──
+        if not PLAYWRIGHT_AVAILABLE:
             rank_sum = 0
-            completed = 0
-            keyword_url = '+'.join(keyword.strip().split())
-
-            async with async_playwright() as p:
-                browser = None
-                page = None
-
-                async def _start_browser():
-                    nonlocal browser, page
-                    if browser:
-                        try:
-                            await browser.close()
-                        except:
-                            pass
-                        await asyncio.sleep(0.5)
-                    browser = await p.chromium.launch(headless=True, args=BROWSER_ARGS)
-                    context = await browser.new_context(
-                        user_agent=random.choice(USER_AGENTS),
-                        viewport={'width': 1280, 'height': 720},
-                        locale='en-US',
-                        timezone_id='America/Denver',
-                    )
-                    pg = await context.new_page()
-                    # חסום תמונות, פונטים, CSS ומשאבים כבדים
-                    # חסום תמונות ופונטים בלבד — CSS חייב להישאר כדי שגוגל מפות ירנדר
-                    await pg.route('**/*.{png,jpg,jpeg,gif,webp,svg,mp4,woff,woff2}',
-                                  lambda route: route.abort())
-                    await pg.route('**/recaptcha/**', lambda route: route.abort())
-                    return pg
-
-                try:
-                    page = await _start_browser()
-                    points_since_restart = 0
-
-                    for point in grid_points:
-                        # אתחל דפדפן כל BROWSER_RESTART_EVERY נקודות
-                        if points_since_restart >= BROWSER_RESTART_EVERY:
-                            print(f"  🔄 Restarting browser (memory cleanup)...")
-                            page = await _start_browser()
-                            gc.collect()
-                            points_since_restart = 0
-                            await asyncio.sleep(1)
-
-                        url = f"https://www.google.com/maps/search/{keyword_url}/@{point['lat']},{point['lng']},14z?hl=en"
-
-                        try:
-                            await page.goto(url, timeout=25000, wait_until='domcontentloaded')
-                            await asyncio.sleep(random.uniform(1.5, 3.0))
-                            rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
-                        except Exception as e:
-                            print(f"  ❌ Error at ({point['lat']},{point['lng']}): {e}")
-                            rank, businesses = 20, []
-                            # נסה לאתחל דפדפן אחרי שגיאה
-                            try:
-                                page = await _start_browser()
-                                points_since_restart = 0
-                            except:
-                                pass
-
-                        print(f"  📍 ({point['lat']:.4f},{point['lng']:.4f}) → rank {rank} ({len(businesses)} biz)")
-
-                        _save_result(conn, scan_id, point, rank, businesses)
-                        rank_sum += rank
-                        completed += 1
-                        points_since_restart += 1
-
-                        conn.execute("UPDATE scans SET status=? WHERE id=?",
-                                    (f'running:{completed}/{total}', scan_id))
-                        conn.commit()
-
-                        # השהייה בין נקודות
-                        await asyncio.sleep(random.uniform(2.0, 4.0))
-
-                finally:
-                    if browser:
-                        await browser.close()
-
-            avg_rank = round(rank_sum / total, 1) if total > 0 else 20
+            completed = already_done
+            for point in grid_points:
+                rank, businesses = _mock_rank()
+                _save_result(conn, scan_id, point, rank, businesses)
+                rank_sum += rank
+                completed += 1
+                conn.execute("UPDATE scans SET status=? WHERE id=?",
+                            (f'running:{completed}/{total}', scan_id))
+                conn.commit()
+            # חשב ממוצע על כל התוצאות
+            all_ranks = conn.execute(
+                "SELECT rank FROM scan_results WHERE scan_id=?", (scan_id,)
+            ).fetchall()
+            avg_rank = round(sum(r[0] for r in all_ranks) / len(all_ranks), 1) if all_ranks else 20
             conn.execute(
                 '''UPDATE scans SET status='done', avg_rank=?, completed_at=CURRENT_TIMESTAMP
                    WHERE id=?''', (avg_rank, scan_id))
             conn.commit()
-            print(f"\n✅ Scan #{scan_id} done. Avg rank: {avg_rank}")
+            print(f"\n✅ Scan #{scan_id} done (mock). Avg rank: {avg_rank}")
+            return
 
-        except Exception as e:
-            print(f"❌ Scan #{scan_id} failed: {e}")
-            import traceback
-            traceback.print_exc()
-            conn.execute("UPDATE scans SET status='error' WHERE id=?", (scan_id,))
+        # ── חלק לbatches והרץ כל אחד בsubprocess ──
+        rank_sum = 0
+        completed = already_done
+
+        for batch_start in range(0, remaining, BATCH_SIZE):
+            batch_points = grid_points[batch_start:batch_start + BATCH_SIZE]
+            batch_num = batch_start // BATCH_SIZE + 1
+            total_batches = (remaining + BATCH_SIZE - 1) // BATCH_SIZE
+
+            print(f"  📦 Batch {batch_num}/{total_batches} ({len(batch_points)} points)...", flush=True)
+
+            # הרץ batch בתהליך נפרד
+            batch_results = _run_batch_subprocess(keyword, business_name, batch_points)
+
+            # שמור תוצאות
+            for result in batch_results:
+                point = result['point']
+                rank = result['rank']
+                businesses = result.get('businesses', [])
+
+                print(f"    📍 ({point['lat']:.4f},{point['lng']:.4f}) → rank {rank} ({len(businesses)} biz)")
+
+                _save_result(conn, scan_id, point, rank, businesses)
+                rank_sum += rank
+                completed += 1
+
+            conn.execute("UPDATE scans SET status=? WHERE id=?",
+                        (f'running:{completed}/{total}', scan_id))
             conn.commit()
-        finally:
-            conn.close()
+
+            # gc בתהליך הראשי
+            gc.collect()
+            print(f"  ✅ Batch {batch_num} done. Progress: {completed}/{total}", flush=True)
+
+            # השהייה קצרה בין batches
+            time.sleep(1)
+
+        # חשב ממוצע על כל התוצאות (כולל מסריקה קודמת אם זה resume)
+        all_ranks = conn.execute(
+            "SELECT rank FROM scan_results WHERE scan_id=?", (scan_id,)
+        ).fetchall()
+        avg_rank = round(sum(r[0] for r in all_ranks) / len(all_ranks), 1) if all_ranks else 20
+        conn.execute(
+            '''UPDATE scans SET status='done', avg_rank=?, completed_at=CURRENT_TIMESTAMP
+               WHERE id=?''', (avg_rank, scan_id))
+        conn.commit()
+        print(f"\n✅ Scan #{scan_id} done. Avg rank: {avg_rank}")
+
+    except Exception as e:
+        print(f"❌ Scan #{scan_id} failed: {e}")
+        import traceback
+        traceback.print_exc()
+        conn.execute("UPDATE scans SET status='error' WHERE id=?", (scan_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ── נקודת כניסה לתהליך-בן (subprocess worker) ──
+
+if __name__ == '__main__' and '--batch-worker' in sys.argv:
+    """
+    מצב עובד: מקבל JSON מ-stdin, מריץ batch, מחזיר JSON ל-stdout.
+    כל הזיכרון משתחרר כשהתהליך מסתיים.
+    """
+    input_data = json.loads(sys.stdin.read())
+    keyword = input_data['keyword']
+    business_name = input_data['business_name']
+    points = input_data['points']
 
     loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(_run())
+    results = loop.run_until_complete(_run_batch_async(keyword, business_name, points))
     loop.close()
+
+    print(json.dumps(results), flush=True)
 
 
 def _save_result(conn, scan_id, point, rank, businesses):

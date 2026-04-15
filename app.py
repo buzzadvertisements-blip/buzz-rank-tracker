@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import threading
 import os
+import re
 
 from database import init_db, get_db, DB_PATH
 from grid_utils import generate_grid, geocode_address
@@ -13,6 +14,93 @@ CORS(app)
 # ── אתחול ──────────────────────────────────────────────────────────────────────
 
 init_db()
+
+
+def _resume_stuck_scans():
+    """
+    בודק אם יש סריקות שנתקעו (status=running:X/Y) ומפעיל אותן מחדש.
+    נקרא בעליית השירות — אם הDB שרד (לא נמחק) נוכל להמשיך מאיפה שנעצרנו.
+    """
+    try:
+        db = get_db()
+        stuck = db.execute(
+            "SELECT s.*, b.name as business_name, b.lat, b.lng "
+            "FROM scans s JOIN businesses b ON b.id=s.business_id "
+            "WHERE s.status LIKE 'running:%'"
+        ).fetchall()
+
+        for scan in stuck:
+            scan_dict = dict(scan)
+            scan_id = scan_dict['id']
+
+            # מצא אילו נקודות כבר הושלמו
+            completed_points = db.execute(
+                "SELECT grid_row, grid_col FROM scan_results WHERE scan_id=?",
+                (scan_id,)
+            ).fetchall()
+            completed_set = {(r['grid_row'], r['grid_col']) for r in completed_points}
+
+            # צור מחדש את כל נקודות הגריד
+            all_points = generate_grid(
+                scan_dict['lat'], scan_dict['lng'],
+                scan_dict['grid_size'], scan_dict['spacing_km']
+            )
+
+            # סנן רק נקודות שלא הושלמו
+            remaining = [p for p in all_points if (p['row'], p['col']) not in completed_set]
+
+            if not remaining:
+                # כל הנקודות הושלמו — חשב ממוצע וסגור
+                all_ranks = db.execute(
+                    "SELECT rank FROM scan_results WHERE scan_id=?", (scan_id,)
+                ).fetchall()
+                if all_ranks:
+                    avg = round(sum(r['rank'] for r in all_ranks) / len(all_ranks), 1)
+                else:
+                    avg = 20
+                db.execute(
+                    "UPDATE scans SET status='done', avg_rank=?, completed_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (avg, scan_id))
+                db.commit()
+                print(f"🔄 Scan #{scan_id} was complete — marked as done (avg {avg})")
+                continue
+
+            print(f"🔄 Resuming scan #{scan_id}: {len(remaining)}/{len(all_points)} points remaining")
+
+            # עדכן סטטוס
+            done_count = len(completed_set)
+            total = len(all_points)
+            db.execute("UPDATE scans SET status=? WHERE id=?",
+                       (f'running:{done_count}/{total}', scan_id))
+            db.commit()
+
+            # הרץ את הנקודות הנותרות
+            t = threading.Thread(
+                target=_resume_scan_worker,
+                args=(scan_id, scan_dict['business_name'], scan_dict['keyword'],
+                      remaining, all_points, done_count, DB_PATH),
+                daemon=True
+            )
+            t.start()
+
+        db.close()
+    except Exception as e:
+        print(f"⚠️ Resume check failed: {e}")
+
+
+def _resume_scan_worker(scan_id, business_name, keyword, remaining_points,
+                        all_points, already_done, db_path):
+    """ממשיך סריקה מנקודה שנעצרה"""
+    import sqlite3
+
+    # run_scan_sync מצפה ל-grid_points מלא, אבל אנחנו רוצים רק את הנותרים
+    # נשתמש ישירות בלוגיקה של run_scan_sync עם remaining_points
+    run_scan_sync(scan_id, business_name, keyword, remaining_points, db_path,
+                  already_done=already_done, total_override=len(all_points))
+
+
+# בדוק סריקות תקועות בעליית השירות
+_resume_stuck_scans()
 
 # ── דפים ───────────────────────────────────────────────────────────────────────
 
