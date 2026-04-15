@@ -21,8 +21,19 @@ BROWSER_ARGS = [
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     '--single-process',
-    '--window-size=1280,720',
+    '--window-size=800,600',
+    '--disable-software-rasterizer',
+    '--disable-logging',
+    '--disable-default-apps',
+    '--no-first-run',
+    '--disable-translate',
+    '--disable-sync',
+    '--disable-background-networking',
+    '--js-flags=--max-old-space-size=128',
 ]
+
+# כל כמה נקודות לאתחל את הדפדפן לשחרור זיכרון
+BROWSER_RESTART_EVERY = 10
 
 USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -199,28 +210,50 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
                 print(f"\n✅ Scan #{scan_id} done (mock). Avg rank: {avg_rank}")
                 return
 
-            # ── מצב אמיתי - דפדפן אחד, סדרתי ──
+            # ── מצב אמיתי - דפדפן עם ריסטרט תקופתי לשחרור זיכרון ──
             rank_sum = 0
             completed = 0
+            keyword_url = '+'.join(keyword.strip().split())
 
             async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True, args=BROWSER_ARGS)
-                try:
+                browser = None
+                page = None
+
+                async def _start_browser():
+                    nonlocal browser, page
+                    if browser:
+                        try:
+                            await browser.close()
+                        except:
+                            pass
+                        await asyncio.sleep(0.5)
+                    browser = await p.chromium.launch(headless=True, args=BROWSER_ARGS)
                     context = await browser.new_context(
                         user_agent=random.choice(USER_AGENTS),
-                        viewport={'width': 1280, 'height': 720},
+                        viewport={'width': 800, 'height': 600},
                         locale='en-US',
                         timezone_id='America/Denver',
                     )
-                    page = await context.new_page()
+                    pg = await context.new_page()
+                    # חסום תמונות, פונטים, CSS ומשאבים כבדים
+                    await pg.route('**/*.{png,jpg,jpeg,gif,webp,svg,mp4,woff,woff2,css,ico}',
+                                  lambda route: route.abort())
+                    await pg.route('**/recaptcha/**', lambda route: route.abort())
+                    await pg.route('**/analytics**', lambda route: route.abort())
+                    return pg
 
-                    # חסום תמונות ומשאבים כבדים
-                    await page.route('**/*.{png,jpg,jpeg,gif,webp,svg,mp4,woff,woff2}',
-                                    lambda route: route.abort())
-
-                    keyword_url = '+'.join(keyword.strip().split())
+                try:
+                    page = await _start_browser()
+                    points_since_restart = 0
 
                     for point in grid_points:
+                        # אתחל דפדפן כל BROWSER_RESTART_EVERY נקודות
+                        if points_since_restart >= BROWSER_RESTART_EVERY:
+                            print(f"  🔄 Restarting browser (memory cleanup)...")
+                            page = await _start_browser()
+                            points_since_restart = 0
+                            await asyncio.sleep(1)
+
                         url = f"https://www.google.com/maps/search/{keyword_url}/@{point['lat']},{point['lng']},14z?hl=en"
 
                         try:
@@ -230,12 +263,19 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
                         except Exception as e:
                             print(f"  ❌ Error at ({point['lat']},{point['lng']}): {e}")
                             rank, businesses = 20, []
+                            # נסה לאתחל דפדפן אחרי שגיאה
+                            try:
+                                page = await _start_browser()
+                                points_since_restart = 0
+                            except:
+                                pass
 
                         print(f"  📍 ({point['lat']:.4f},{point['lng']:.4f}) → rank {rank} ({len(businesses)} biz)")
 
                         _save_result(conn, scan_id, point, rank, businesses)
                         rank_sum += rank
                         completed += 1
+                        points_since_restart += 1
 
                         conn.execute("UPDATE scans SET status=? WHERE id=?",
                                     (f'running:{completed}/{total}', scan_id))
@@ -245,7 +285,8 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
                         await asyncio.sleep(random.uniform(2.0, 4.0))
 
                 finally:
-                    await browser.close()
+                    if browser:
+                        await browser.close()
 
             avg_rank = round(rank_sum / total, 1) if total > 0 else 20
             conn.execute(
