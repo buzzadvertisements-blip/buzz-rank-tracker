@@ -334,6 +334,80 @@ def get_scan_distribution(scan_id):
     return jsonify(dist)
 
 
+@app.route('/api/scans/<int:scan_id>/resume', methods=['POST'])
+def resume_scan(scan_id):
+    """המשך סריקה תקועה ידנית — בלי לאבד תוצאות קיימות"""
+    db = get_db()
+    scan = db.execute(
+        'SELECT s.*, b.name as business_name, b.lat, b.lng '
+        'FROM scans s JOIN businesses b ON b.id=s.business_id WHERE s.id=?',
+        (scan_id,)
+    ).fetchone()
+    if not scan:
+        db.close()
+        return jsonify({'error': 'סריקה לא נמצאה'}), 404
+
+    scan_dict = dict(scan)
+    status = scan_dict['status']
+
+    # אפשר resume רק לסריקות שנתקעו
+    if status == 'done':
+        db.close()
+        return jsonify({'error': 'הסריקה כבר הסתיימה'}), 400
+
+    # מצא אילו נקודות כבר הושלמו
+    completed_points = db.execute(
+        "SELECT grid_row, grid_col FROM scan_results WHERE scan_id=?",
+        (scan_id,)
+    ).fetchall()
+    completed_set = {(r['grid_row'], r['grid_col']) for r in completed_points}
+
+    # צור מחדש את כל נקודות הגריד
+    all_points = generate_grid(
+        scan_dict['lat'], scan_dict['lng'],
+        scan_dict['grid_size'], scan_dict['spacing_km']
+    )
+
+    # סנן רק נקודות שלא הושלמו
+    remaining = [p for p in all_points if (p['row'], p['col']) not in completed_set]
+
+    if not remaining:
+        # כל הנקודות הושלמו — סגור
+        all_ranks = db.execute(
+            "SELECT rank FROM scan_results WHERE scan_id=?", (scan_id,)
+        ).fetchall()
+        avg = round(sum(r['rank'] for r in all_ranks) / len(all_ranks), 1) if all_ranks else 20
+        db.execute(
+            "UPDATE scans SET status='done', avg_rank=?, completed_at=CURRENT_TIMESTAMP WHERE id=?",
+            (avg, scan_id))
+        db.commit()
+        db.close()
+        return jsonify({'status': 'done', 'avg_rank': avg, 'message': 'כל הנקודות כבר הושלמו'})
+
+    done_count = len(completed_set)
+    total = len(all_points)
+    db.execute("UPDATE scans SET status=? WHERE id=?",
+               (f'running:{done_count}/{total}', scan_id))
+    db.commit()
+    db.close()
+
+    # הרץ את הנקודות הנותרות ב-thread
+    t = threading.Thread(
+        target=_resume_scan_worker,
+        args=(scan_id, scan_dict['business_name'], scan_dict['keyword'],
+              remaining, all_points, done_count, DB_PATH),
+        daemon=True
+    )
+    t.start()
+
+    return jsonify({
+        'status': 'resumed',
+        'completed': done_count,
+        'remaining': len(remaining),
+        'total': total
+    })
+
+
 @app.route('/api/scans/<int:scan_id>', methods=['DELETE'])
 def delete_scan(scan_id):
     db = get_db()
