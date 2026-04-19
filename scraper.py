@@ -30,7 +30,7 @@ BROWSER_ARGS = [
 ]
 
 # כמה נקודות לעבד בכל תהליך-בן (subprocess)
-BATCH_SIZE = 4
+BATCH_SIZE = 3
 
 # כמה תהליכי-בן להריץ במקביל (Render free = 512MB, כרומיום צורך ~200MB)
 MAX_PARALLEL = 1
@@ -419,6 +419,9 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
             conn.commit()
             print(f"  ✅ Batch {batch_idx + 1} done. Progress: {completed}/{total}", flush=True)
             gc.collect()
+            # השהיה בין batches כדי לתת ל-OS לשחרר זיכרון
+            if batch_idx < total_batches - 1:
+                time.sleep(3)
 
         # חשב ממוצע על כל התוצאות (כולל מסריקה קודמת אם זה resume)
         all_ranks = conn.execute(
