@@ -239,17 +239,17 @@ async def _run_batch_async(keyword, business_name, points):
                 await asyncio.sleep(1)  # זמן לטעינת מספר תוצאות ולא רק הראשונה
                 print(f"  [warmup] feed loaded OK — extracting first point", file=sys.stderr, flush=True)
                 warmup_rank, warmup_biz = await _extract_top_businesses(page, business_name, top_n=5)
-                # אם הפדים לא נטען נכון — עשה reload מלא (לא רק sleep)
-                if warmup_rank == 20 and len(warmup_biz) == 0:
-                    print(f"  [warmup] empty extract — reloading page...", file=sys.stderr, flush=True)
+                # אם הפיד לא נטען מלא (rank=20 עם פחות מ-3 עסקים = טעינה חלקית) — reload
+                if warmup_rank == 20 and len(warmup_biz) < 3:
+                    print(f"  [warmup] partial extract ({len(warmup_biz)} biz) — reloading page...", file=sys.stderr, flush=True)
                     await page.goto(warmup_url, timeout=25000, wait_until='domcontentloaded')
                     await asyncio.sleep(3)
                     warmup_rank, warmup_biz = await _extract_top_businesses(page, business_name, top_n=5)
             except Exception as we:
                 print(f"  [warmup] feed not loaded after warmup: {we}", file=sys.stderr, flush=True)
 
-            # fallback אחרון: אם warmup עדיין ריק — עשה ניווט רגיל כמו שאר הנקודות
-            if warmup_rank == 20 and len(warmup_biz) == 0:
+            # fallback אחרון: אם warmup עדיין חלקי — עשה ניווט רגיל כמו שאר הנקודות
+            if warmup_rank == 20 and len(warmup_biz) < 3:
                 print(f"  [warmup] fallback — standard navigation for first point", file=sys.stderr, flush=True)
                 try:
                     await page.goto(warmup_url, timeout=25000, wait_until='domcontentloaded')
@@ -278,10 +278,11 @@ async def _run_batch_async(keyword, business_name, points):
 
                     rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
 
-                    # retry: אם נכשל, חכה ונסה שוב
-                    if rank == 20 and len(businesses) == 0:
-                        print(f"  [{i+1}/{len(points)}] retry...", file=sys.stderr, flush=True)
-                        await asyncio.sleep(2)
+                    # retry: אם נכשל או טעינה חלקית (<3 עסקים), reload ונסה שוב
+                    if rank == 20 and len(businesses) < 3:
+                        print(f"  [{i+1}/{len(points)}] partial ({len(businesses)} biz) — reload+retry...", file=sys.stderr, flush=True)
+                        await page.goto(url, timeout=25000, wait_until='domcontentloaded')
+                        await asyncio.sleep(3)
                         rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
 
                     print(f"  [{i+1}/{len(points)}] ({point['lat']:.4f},{point['lng']:.4f}) → rank={rank}", file=sys.stderr, flush=True)
