@@ -30,7 +30,7 @@ BROWSER_ARGS = [
 ]
 
 # כמה נקודות לעבד בכל תהליך-בן (subprocess)
-BATCH_SIZE = 2
+BATCH_SIZE = 4
 
 # כמה תהליכי-בן להריץ במקביל (Render free = 512MB, כרומיום צורך ~200MB)
 MAX_PARALLEL = 1
@@ -204,6 +204,41 @@ async def _run_batch_async(keyword, business_name, points):
         page = await context.new_page()
 
         try:
+            # ── חימום: נווט לגוגל מפות וטפל ב-consent לפני הסריקה ──
+            warmup_url = f"https://www.google.com/maps/search/{keyword_url}/@{points[0]['lat']},{points[0]['lng']},13z?hl=en"
+            print(f"  [warmup] navigating to Maps...", file=sys.stderr, flush=True)
+            await page.goto(warmup_url, timeout=25000, wait_until='domcontentloaded')
+            await asyncio.sleep(3)
+
+            # טפל בדיאלוג consent
+            try:
+                accepted = await page.evaluate('''() => {
+                    const buttons = document.querySelectorAll('button, form[action*="consent"] button');
+                    for (const btn of buttons) {
+                        const txt = (btn.innerText || '').toLowerCase().trim();
+                        if (txt === 'accept all' || txt === 'i agree' || txt === 'agree' || txt.includes('accept')) {
+                            btn.click();
+                            return true;
+                        }
+                    }
+                    return false;
+                }''')
+                if accepted:
+                    print(f"  [warmup] consent accepted!", file=sys.stderr, flush=True)
+                    await asyncio.sleep(3)
+                else:
+                    print(f"  [warmup] no consent dialog found", file=sys.stderr, flush=True)
+            except Exception as ce:
+                print(f"  [warmup] consent check error: {ce}", file=sys.stderr, flush=True)
+
+            # חכה שה-feed ייטען כחימום
+            try:
+                await page.wait_for_selector('div[role="feed"] > :first-child', timeout=8000)
+                print(f"  [warmup] feed loaded OK", file=sys.stderr, flush=True)
+            except:
+                print(f"  [warmup] feed not loaded after warmup", file=sys.stderr, flush=True)
+
+            # ── סריקה של כל הנקודות ──
             for i, point in enumerate(points):
                 await context.set_geolocation(
                     {'latitude': point['lat'], 'longitude': point['lng']}
@@ -213,26 +248,6 @@ async def _run_batch_async(keyword, business_name, points):
                 try:
                     await page.goto(url, timeout=25000, wait_until='domcontentloaded')
                     await asyncio.sleep(5)
-
-                    # טפל בדיאלוג הסכמה לעוגיות (רק בנקודה הראשונה)
-                    if i == 0:
-                        try:
-                            accepted = await page.evaluate('''() => {
-                                const buttons = document.querySelectorAll('button, form[action*="consent"] button');
-                                for (const btn of buttons) {
-                                    const txt = (btn.innerText || '').toLowerCase().trim();
-                                    if (txt === 'accept all' || txt === 'i agree' || txt === 'agree' || txt.includes('accept')) {
-                                        btn.click();
-                                        return true;
-                                    }
-                                }
-                                return false;
-                            }''')
-                            if accepted:
-                                print(f"  [{i+1}/{len(points)}] consent accepted, waiting...", file=sys.stderr, flush=True)
-                                await asyncio.sleep(3)
-                        except:
-                            pass
 
                     rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
 
