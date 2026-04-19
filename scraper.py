@@ -232,16 +232,31 @@ async def _run_batch_async(keyword, business_name, points):
                 print(f"  [warmup] consent check error: {ce}", file=sys.stderr, flush=True)
 
             # חכה שה-feed ייטען כחימום — וגם חלץ תוצאות של נקודה ראשונה
+            # הערה: warmup צריך יותר זמן מהניווטים הבאים (cold cache + consent flow)
             warmup_rank, warmup_biz = 20, []
             try:
-                await page.wait_for_selector('div[role="feed"] > :first-child', timeout=6000)
+                await page.wait_for_selector('div[role="feed"] > :first-child', timeout=10000)
+                await asyncio.sleep(1)  # זמן לטעינת מספר תוצאות ולא רק הראשונה
                 print(f"  [warmup] feed loaded OK — extracting first point", file=sys.stderr, flush=True)
                 warmup_rank, warmup_biz = await _extract_top_businesses(page, business_name, top_n=5)
+                # אם הפדים לא נטען נכון — עשה reload מלא (לא רק sleep)
                 if warmup_rank == 20 and len(warmup_biz) == 0:
-                    await asyncio.sleep(2)
+                    print(f"  [warmup] empty extract — reloading page...", file=sys.stderr, flush=True)
+                    await page.goto(warmup_url, timeout=25000, wait_until='domcontentloaded')
+                    await asyncio.sleep(3)
                     warmup_rank, warmup_biz = await _extract_top_businesses(page, business_name, top_n=5)
-            except:
-                print(f"  [warmup] feed not loaded after warmup", file=sys.stderr, flush=True)
+            except Exception as we:
+                print(f"  [warmup] feed not loaded after warmup: {we}", file=sys.stderr, flush=True)
+
+            # fallback אחרון: אם warmup עדיין ריק — עשה ניווט רגיל כמו שאר הנקודות
+            if warmup_rank == 20 and len(warmup_biz) == 0:
+                print(f"  [warmup] fallback — standard navigation for first point", file=sys.stderr, flush=True)
+                try:
+                    await page.goto(warmup_url, timeout=25000, wait_until='domcontentloaded')
+                    await asyncio.sleep(3)
+                    warmup_rank, warmup_biz = await _extract_top_businesses(page, business_name, top_n=5)
+                except Exception as fe:
+                    print(f"  [warmup] fallback failed: {fe}", file=sys.stderr, flush=True)
 
             print(f"  [1/{len(points)}] ({points[0]['lat']:.4f},{points[0]['lng']:.4f}) → rank={warmup_rank} (from warmup)", file=sys.stderr, flush=True)
             results.append({
