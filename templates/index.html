@@ -323,6 +323,48 @@
     border-radius: 6px; font-size: 12px; font-weight: 600; padding: 4px 8px;
     box-shadow: none;
   }
+  /* ── SCAN TABS ── */
+  .scan-tabs {
+    display: flex; gap: 0; border-bottom: 1px solid #2d3154;
+    background: #1a1d2e; padding: 0 16px; flex-shrink: 0;
+  }
+  .scan-tab {
+    padding: 10px 16px; font-size: 12px; font-weight: 500;
+    color: #64748b; cursor: pointer; border: none; background: none;
+    border-bottom: 2px solid transparent; transition: all .15s;
+  }
+  .scan-tab:hover { color: #94a3b8; }
+  .scan-tab.active { color: #a5b4fc; border-bottom-color: #6366f1; }
+
+  /* ── ANALYSIS VIEW ── */
+  #analysis-view {
+    flex: 1; overflow-y: auto; background: #0f1117;
+    padding: 20px; display: none;
+  }
+  .analysis-cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .analysis-card {
+    background: #1a1d2e; border: 1px solid #2d3154; border-radius: 10px;
+    padding: 16px; flex: 1; min-width: 140px;
+  }
+  .analysis-card-label { font-size: 11px; color: #64748b; margin-bottom: 4px; }
+  .analysis-card-value { font-size: 24px; font-weight: 800; }
+  .analysis-card-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+  .perf-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 16px; }
+  .perf-table th {
+    text-align: left; padding: 8px 12px; color: #64748b; font-weight: 500;
+    font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #2d3154;
+  }
+  .perf-table td {
+    padding: 10px 12px; border-bottom: 1px solid #1e2235; vertical-align: middle;
+  }
+  .perf-table tr:hover td { background: #1a1d2e; }
+  .perf-table tr.is-you td { background: #1e1b4b; border: 1px solid #4338ca; }
+  .comp-bar {
+    height: 18px; background: #6366f1; border-radius: 3px;
+    display: inline-block; min-width: 2px; transition: width .3s;
+  }
+
   #no-biz { text-align:center; padding:60px 20px; color:#64748b; }
   #no-biz h3 { font-size:15px; margin-bottom:8px; }
   .spinner { display:inline-block; width:14px; height:14px; border:2px solid #3d4172;
@@ -396,8 +438,21 @@
     <button class="tb-btn tb-btn-ghost" onclick="openAddBusinessModal()">+ Add Business</button>
   </div>
 
+  <!-- Scan Tabs (shown when a scan is loaded) -->
+  <div class="scan-tabs" id="scan-tabs" style="display:none">
+    <button class="scan-tab active" onclick="showScanTab('map')">Map View</button>
+    <button class="scan-tab" onclick="showScanTab('analysis')">Scan Analysis</button>
+    <button class="scan-tab" onclick="showScanTab('competitors')">Top Competitors</button>
+  </div>
+
   <!-- Map -->
   <div id="map"></div>
+
+  <!-- Analysis View -->
+  <div id="analysis-view"></div>
+
+  <!-- Competitors View -->
+  <div id="competitors-view" style="flex:1;overflow-y:auto;background:#0f1117;padding:20px;display:none"></div>
 
   <!-- Scans Table -->
   <div id="scans-view">
@@ -656,13 +711,16 @@ async function selectBusiness(id) {
 function showView(view) {
   document.getElementById('map').style.display      = view === 'map'   ? 'block' : 'none';
   document.getElementById('scans-view').style.display = view === 'scans' ? 'block' : 'none';
+  document.getElementById('analysis-view').style.display = 'none';
+  document.getElementById('competitors-view').style.display = 'none';
   document.getElementById('scan-info').style.display  = view === 'map'   ? '' : 'none';
   document.getElementById('legend').style.display     = view === 'map'   ? '' : 'none';
+  document.getElementById('scan-tabs').style.display  = (view === 'map' && currentScanId) ? 'flex' : 'none';
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('nav-' + (view === 'scans' ? 'scans' : 'map')).classList.add('active');
 
-  if (view === 'scans') loadScansTable();
-  if (view === 'map') setTimeout(() => map.invalidateSize(), 50);
+  if (view === 'scans') { document.getElementById('scan-tabs').style.display = 'none'; loadScansTable(); }
+  if (view === 'map') { currentScanTab = 'map'; setTimeout(() => map.invalidateSize(), 50); }
 }
 
 // ── Scans Table ────────────────────────────────────────────────────────────────
@@ -703,6 +761,11 @@ function clearHeatmap() {
 async function loadScanHeatmap(scanId) {
   clearHeatmap();
   currentScanId = scanId;
+  cachedCompetitors = null;
+  document.getElementById('scan-tabs').style.display = 'flex';
+  // Reset tabs to map view
+  document.querySelectorAll('.scan-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.scan-tab[onclick*="map"]').classList.add('active');
 
   const [scanR, resultsR] = await Promise.all([
     fetch('/api/scans/' + scanId),
@@ -1125,6 +1188,127 @@ function closeModal(id) {
 document.querySelectorAll('.modal-bg').forEach(bg => {
   bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('open'); });
 });
+
+// ── Scan Tabs ─────────────────────────────────────────────────────────────
+let currentScanTab = 'map';
+let cachedCompetitors = null;
+
+function showScanTab(tab) {
+  currentScanTab = tab;
+  document.querySelectorAll('.scan-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.scan-tab[onclick*="' + tab + '"]').classList.add('active');
+
+  document.getElementById('map').style.display = tab === 'map' ? 'block' : 'none';
+  document.getElementById('analysis-view').style.display = tab === 'analysis' ? 'block' : 'none';
+  document.getElementById('competitors-view').style.display = tab === 'competitors' ? 'block' : 'none';
+  document.getElementById('scan-info').style.display = tab === 'map' ? 'block' : 'none';
+  document.getElementById('legend').style.display = tab === 'map' ? '' : 'none';
+
+  if (tab === 'map') setTimeout(() => map.invalidateSize(), 50);
+  if (tab === 'analysis' && currentScanId) loadAnalysis(currentScanId);
+  if (tab === 'competitors' && currentScanId) loadCompetitors(currentScanId);
+}
+
+async function loadAnalysis(scanId) {
+  const view = document.getElementById('analysis-view');
+  view.innerHTML = '<div style="text-align:center;padding:40px;color:#64748b"><span class="spinner"></span> Loading analysis...</div>';
+  try {
+    const r = await fetch('/api/scans/' + scanId + '/competitors');
+    const data = await r.json();
+    cachedCompetitors = data;
+    renderAnalysis(data);
+  } catch(e) {
+    view.innerHTML = '<div style="color:#f87171;padding:20px">Error loading analysis: ' + e.message + '</div>';
+  }
+}
+
+function renderAnalysis(data) {
+  const view = document.getElementById('analysis-view');
+  const ourBiz = data.competitors.find(c => c.is_you);
+  const gridSize = Math.round(Math.sqrt(data.total_points));
+
+  let html = '<h2 style="font-size:18px;margin-bottom:16px;color:#e2e8f0">Executive Summary for ' + data.business_name + '</h2>';
+  html += '<div class="analysis-cards">';
+  html += '<div class="analysis-card"><div class="analysis-card-label">Average Ranking</div><div class="analysis-card-value" style="color:' + (ourBiz ? rankColor(ourBiz.avg_rank) : '#64748b') + '">' + (ourBiz ? ourBiz.avg_rank : '—') + '</div><div class="analysis-card-sub">Your position</div></div>';
+  html += '<div class="analysis-card"><div class="analysis-card-label">Grid Coverage</div><div class="analysis-card-value" style="color:#60a5fa">' + gridSize + 'x' + gridSize + '</div><div class="analysis-card-sub">' + data.total_points + ' points</div></div>';
+  html += '<div class="analysis-card"><div class="analysis-card-label">Total Competitors</div><div class="analysis-card-value" style="color:#f59e0b">' + data.total_competitors + '</div><div class="analysis-card-sub">Unique businesses</div></div>';
+  html += '<div class="analysis-card"><div class="analysis-card-label">Avg Rating</div><div class="analysis-card-value" style="color:#4ade80">' + data.avg_competitor_rating + '</div><div class="analysis-card-sub">Competitor average</div></div>';
+  html += '</div>';
+
+  html += '<div style="background:#1a1d2e;border:1px solid #2d3154;border-radius:10px;padding:16px;margin-bottom:20px">';
+  html += '<h3 style="font-size:14px;margin-bottom:10px;color:#e2e8f0">Key Insights</h3>';
+  html += '<div style="font-size:12px;color:#94a3b8;line-height:1.8">';
+  html += '• Competing against <b style="color:#e2e8f0">' + data.total_competitors + '</b> businesses in the area<br>';
+  html += '• Average competitor rating: <b style="color:#e2e8f0">' + data.avg_competitor_rating + '</b> stars<br>';
+  html += '• <b style="color:#e2e8f0">' + data.with_address + '</b> competitors have addresses listed<br>';
+  if (ourBiz) {
+    html += '• Your appearances: <b style="color:#e2e8f0">' + ourBiz.appearances + '/' + data.total_points + '</b> (' + ourBiz.appearance_pct + '%)<br>';
+    html += '• Your top 3 rate: <b style="color:#e2e8f0">' + ourBiz.top3_pct + '%</b><br>';
+    const marketPos = ourBiz.avg_rank <= 3 ? 'Dominant' : ourBiz.avg_rank <= 7 ? 'Strong' : ourBiz.avg_rank <= 12 ? 'Moderate' : 'Needs improvement';
+    html += '• Market position: <b style="color:' + rankColor(ourBiz.avg_rank) + '">' + marketPos + '</b>';
+  }
+  html += '</div></div>';
+
+  html += '<h3 style="font-size:14px;margin-bottom:10px;color:#e2e8f0">Performance Matrix</h3>';
+  html += '<table class="perf-table"><thead><tr><th>Business</th><th>Avg. Rank</th><th>Appearances</th><th>Top 3%</th><th>Rating</th><th>Reviews</th></tr></thead><tbody>';
+  data.competitors.slice(0, 20).forEach(c => {
+    const rowClass = c.is_you ? ' class="is-you"' : '';
+    const nameLabel = c.is_you ? c.name + ' <span style="color:#a5b4fc;font-size:10px">(You)</span>' : c.name;
+    html += '<tr' + rowClass + '><td style="font-weight:600;color:#e2e8f0">' + nameLabel + '</td>';
+    html += '<td style="color:' + rankColor(c.avg_rank) + ';font-weight:700">' + c.avg_rank + '</td>';
+    html += '<td>' + c.appearances + '/' + data.total_points + '</td><td>' + c.top3_pct + '%</td>';
+    html += '<td>' + (c.rating || '—') + '</td><td>' + (c.reviews || '—') + '</td></tr>';
+  });
+  if (data.competitors.length > 20) html += '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:12px">+ ' + (data.competitors.length - 20) + ' more</td></tr>';
+  html += '</tbody></table>';
+  view.innerHTML = html;
+}
+
+async function loadCompetitors(scanId) {
+  const view = document.getElementById('competitors-view');
+  view.innerHTML = '<div style="text-align:center;padding:40px;color:#64748b"><span class="spinner"></span> Loading competitors...</div>';
+  try {
+    let data = cachedCompetitors;
+    if (!data || data.scan_id !== scanId) {
+      const r = await fetch('/api/scans/' + scanId + '/competitors');
+      data = await r.json();
+      cachedCompetitors = data;
+    }
+    renderCompetitors(data);
+  } catch(e) {
+    view.innerHTML = '<div style="color:#f87171;padding:20px">Error: ' + e.message + '</div>';
+  }
+}
+
+function renderCompetitors(data) {
+  const view = document.getElementById('competitors-view');
+  const top15 = data.competitors.slice(0, 15);
+  const maxApp = top15.length > 0 ? Math.max(...top15.map(c => c.appearance_pct)) : 100;
+
+  let html = '<div style="background:linear-gradient(135deg,#312e81,#4338ca);border-radius:12px;padding:20px;margin-bottom:20px">';
+  html += '<h2 style="font-size:18px;color:white;margin-bottom:4px">Top Competitors Analysis</h2>';
+  html += '<div style="font-size:12px;color:#c4b5fd">Analyzing top ' + top15.length + ' competitors found across ' + data.total_points + ' search points</div></div>';
+
+  html += '<div class="analysis-cards">';
+  html += '<div class="analysis-card"><div class="analysis-card-label">Total Competitors</div><div class="analysis-card-value" style="color:#6366f1">' + top15.length + '</div><div class="analysis-card-sub">Top businesses</div></div>';
+  html += '<div class="analysis-card"><div class="analysis-card-label">Average Rating</div><div class="analysis-card-value" style="color:#f59e0b">' + data.avg_competitor_rating + '</div><div class="analysis-card-sub">Competitor average</div></div>';
+  html += '<div class="analysis-card"><div class="analysis-card-label">With Addresses</div><div class="analysis-card-value" style="color:#4ade80">' + data.with_address + '/' + data.total_competitors + '</div><div class="analysis-card-sub">' + Math.round(data.with_address/Math.max(1,data.total_competitors)*100) + '%</div></div>';
+  html += '</div>';
+
+  html += '<div style="background:#1a1d2e;border:1px solid #2d3154;border-radius:10px;padding:20px;margin-top:16px">';
+  html += '<h3 style="font-size:14px;margin-bottom:4px;color:#e2e8f0">Appearance Frequency — Top Competitors</h3>';
+  html += '<div style="font-size:11px;color:#64748b;margin-bottom:16px">How often each competitor appears in search results</div>';
+  top15.forEach(c => {
+    const barW = Math.max(2, (c.appearance_pct / maxApp) * 100);
+    const nm = c.is_you ? '<b style="color:#a5b4fc">' + c.name + ' (You)</b>' : c.name;
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">';
+    html += '<div style="width:200px;font-size:11px;color:#94a3b8;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + c.name + '">' + nm + '</div>';
+    html += '<div style="flex:1"><div class="comp-bar" style="width:' + barW + '%;' + (c.is_you ? 'background:#a78bfa' : '') + '"></div></div>';
+    html += '<div style="width:50px;font-size:11px;color:#e2e8f0;font-weight:600">' + c.appearance_pct + '%</div></div>';
+  });
+  html += '</div>';
+  view.innerHTML = html;
+}
 
 // ── Init ───────────────────────────────────────────────────────────────────────
 loadBusinesses();

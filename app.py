@@ -319,6 +319,97 @@ def get_rank_history(business_id):
     return jsonify(history)
 
 
+@app.route('/api/scans/<int:scan_id>/competitors', methods=['GET'])
+def get_scan_competitors(scan_id):
+    """ניתוח מתחרים — Performance Matrix + Top Competitors כמו GTrack"""
+    db = get_db()
+
+    # שלוף את כל העסקים מכל נקודות הסריקה
+    results = db.execute(
+        'SELECT sr.id as result_id, sr.rank, srb.position, srb.name, srb.address, '
+        'srb.rating, srb.reviews '
+        'FROM scan_results sr '
+        'JOIN scan_result_businesses srb ON srb.scan_result_id = sr.id '
+        'WHERE sr.scan_id=? '
+        'ORDER BY srb.position',
+        (scan_id,)
+    ).fetchall()
+
+    scan = db.execute(
+        'SELECT s.*, b.name as business_name FROM scans s '
+        'JOIN businesses b ON b.id=s.business_id WHERE s.id=?',
+        (scan_id,)
+    ).fetchone()
+    db.close()
+
+    if not scan:
+        return jsonify({'error': 'סריקה לא נמצאה'}), 404
+
+    scan_dict = dict(scan)
+    total_points = scan_dict['grid_size'] ** 2
+    our_name = scan_dict['business_name']
+
+    # ── אגרגציה לפי שם עסק ──
+    competitors = {}
+    for r in results:
+        row = dict(r)
+        name = row['name'] or 'Unknown'
+        if name not in competitors:
+            competitors[name] = {
+                'name': name,
+                'appearances': 0,
+                'total_rank': 0,
+                'best_rank': 999,
+                'top3_count': 0,
+                'rating': row['rating'],
+                'reviews': row['reviews'] or 0,
+                'address': row['address'] or '',
+                'has_website': False,
+                'is_you': name.lower().strip() == our_name.lower().strip()
+            }
+        comp = competitors[name]
+        comp['appearances'] += 1
+        position = row['position']
+        comp['total_rank'] += position
+        if position < comp['best_rank']:
+            comp['best_rank'] = position
+        if position <= 3:
+            comp['top3_count'] += 1
+        # עדכן rating/reviews אם יש ערך חדש
+        if row['rating'] and (not comp['rating'] or row['rating'] > 0):
+            comp['rating'] = row['rating']
+        if row['reviews'] and row['reviews'] > comp['reviews']:
+            comp['reviews'] = row['reviews']
+
+    # חישוב ממוצעים ואחוזים
+    comp_list = []
+    for c in competitors.values():
+        c['avg_rank'] = round(c['total_rank'] / c['appearances'], 2) if c['appearances'] > 0 else 20
+        c['appearance_pct'] = round(c['appearances'] / total_points * 100, 1)
+        c['top3_pct'] = round(c['top3_count'] / total_points * 100, 2)
+        del c['total_rank']
+        comp_list.append(c)
+
+    # מיין לפי avg_rank
+    comp_list.sort(key=lambda x: x['avg_rank'])
+
+    # סטטיסטיקות כלליות
+    unique_count = len(comp_list)
+    avg_rating = round(sum(c['rating'] or 0 for c in comp_list if c['rating']) /
+                       max(1, sum(1 for c in comp_list if c['rating'])), 1)
+    with_address = sum(1 for c in comp_list if c['address'])
+
+    return jsonify({
+        'scan_id': scan_id,
+        'business_name': our_name,
+        'total_points': total_points,
+        'total_competitors': unique_count,
+        'avg_competitor_rating': avg_rating,
+        'with_address': with_address,
+        'competitors': comp_list[:50]  # Top 50
+    })
+
+
 @app.route('/api/scans/cleanup', methods=['POST'])
 def cleanup_stuck_scans():
     """סימון כל הסריקות התקועות כ-error"""
