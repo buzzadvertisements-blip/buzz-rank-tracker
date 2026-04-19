@@ -16,98 +16,37 @@ CORS(app)
 init_db()
 
 
-def _resume_stuck_scans():
+def _mark_stuck_scans_on_startup():
     """
-    בודק אם יש סריקות שנתקעו (status=running:X/Y) ומפעיל אותן מחדש.
-    נקרא בעליית השירות — אם הDB שרד (לא נמחק) נוכל להמשיך מאיפה שנעצרנו.
+    בעליית השירות — סמן כל סריקה תקועה כ-error.
+    לא מפעילים Chromium בעלייה כדי למנוע OOM על Render free tier (512MB).
+    המשתמש יכול להפעיל סריקה חדשה ידנית.
     """
     try:
         db = get_db()
         stuck = db.execute(
-            "SELECT s.*, b.name as business_name, b.lat, b.lng "
-            "FROM scans s JOIN businesses b ON b.id=s.business_id "
-            "WHERE s.status LIKE 'running:%'"
+            "SELECT id, status FROM scans WHERE status LIKE 'running:%%'"
         ).fetchall()
 
         for scan in stuck:
             scan_dict = dict(scan)
             scan_id = scan_dict['id']
+            db.execute("UPDATE scans SET status='error' WHERE id=?", (scan_id,))
+            print(f"⚠️ Scan #{scan_id} was stuck ({scan_dict['status']}) — marked as error on startup")
 
-            # מצא אילו נקודות כבר הושלמו
-            completed_points = db.execute(
-                "SELECT grid_row, grid_col FROM scan_results WHERE scan_id=?",
-                (scan_id,)
-            ).fetchall()
-            completed_set = {(r['grid_row'], r['grid_col']) for r in completed_points}
-
-            # סריקה שנכשלה לפני שהספיקה להתקדם — סמן כשגיאה ואל תנסה שוב
-            if len(completed_set) == 0:
-                db.execute("UPDATE scans SET status='error' WHERE id=?", (scan_id,))
-                db.commit()
-                print(f"⚠️ Scan #{scan_id} had 0 progress — marked as error (OOM crash?)")
-                continue
-
-            # צור מחדש את כל נקודות הגריד
-            all_points = generate_grid(
-                scan_dict['lat'], scan_dict['lng'],
-                scan_dict['grid_size'], scan_dict['spacing_km']
-            )
-
-            # סנן רק נקודות שלא הושלמו
-            remaining = [p for p in all_points if (p['row'], p['col']) not in completed_set]
-
-            if not remaining:
-                # כל הנקודות הושלמו — חשב ממוצע וסגור
-                all_ranks = db.execute(
-                    "SELECT rank FROM scan_results WHERE scan_id=?", (scan_id,)
-                ).fetchall()
-                if all_ranks:
-                    avg = round(sum(r['rank'] for r in all_ranks) / len(all_ranks), 1)
-                else:
-                    avg = 20
-                db.execute(
-                    "UPDATE scans SET status='done', avg_rank=?, completed_at=CURRENT_TIMESTAMP WHERE id=?",
-                    (avg, scan_id))
-                db.commit()
-                print(f"🔄 Scan #{scan_id} was complete — marked as done (avg {avg})")
-                continue
-
-            print(f"🔄 Resuming scan #{scan_id}: {len(remaining)}/{len(all_points)} points remaining")
-
-            # עדכן סטטוס
-            done_count = len(completed_set)
-            total = len(all_points)
-            db.execute("UPDATE scans SET status=? WHERE id=?",
-                       (f'running:{done_count}/{total}', scan_id))
+        if stuck:
             db.commit()
-
-            # הרץ את הנקודות הנותרות
-            t = threading.Thread(
-                target=_resume_scan_worker,
-                args=(scan_id, scan_dict['business_name'], scan_dict['keyword'],
-                      remaining, all_points, done_count, DB_PATH),
-                daemon=True
-            )
-            t.start()
+            print(f"✅ Marked {len(stuck)} stuck scan(s) as error")
 
         db.close()
     except Exception as e:
-        print(f"⚠️ Resume check failed: {e}")
+        print(f"⚠️ Startup scan cleanup failed: {e}")
 
 
-def _resume_scan_worker(scan_id, business_name, keyword, remaining_points,
-                        all_points, already_done, db_path):
-    """ממשיך סריקה מנקודה שנעצרה"""
-    import sqlite3
-
-    # run_scan_sync מצפה ל-grid_points מלא, אבל אנחנו רוצים רק את הנותרים
-    # נשתמש ישירות בלוגיקה של run_scan_sync עם remaining_points
-    run_scan_sync(scan_id, business_name, keyword, remaining_points, db_path,
-                  already_done=already_done, total_override=len(all_points))
 
 
-# בדוק סריקות תקועות בעליית השירות
-_resume_stuck_scans()
+# בעליית השירות — סמן סריקות תקועות כ-error (בלי להפעיל Chromium!)
+_mark_stuck_scans_on_startup()
 
 # ── דפים ───────────────────────────────────────────────────────────────────────
 
@@ -425,9 +364,10 @@ def resume_scan(scan_id):
 
     # הרץ את הנקודות הנותרות ב-thread
     t = threading.Thread(
-        target=_resume_scan_worker,
+        target=run_scan_sync,
         args=(scan_id, scan_dict['business_name'], scan_dict['keyword'],
-              remaining, all_points, done_count, DB_PATH),
+              remaining, DB_PATH),
+        kwargs={'already_done': done_count, 'total_override': total},
         daemon=True
     )
     t.start()
