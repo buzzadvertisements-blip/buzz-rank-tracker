@@ -32,8 +32,8 @@ BROWSER_ARGS = [
 # כמה נקודות לעבד בכל תהליך-בן (subprocess)
 BATCH_SIZE = 12
 
-# כמה תהליכי-בן להריץ במקביל
-MAX_PARALLEL = 3
+# כמה תהליכי-בן להריץ במקביל (Render free = 512MB, כרומיום צורך ~200MB)
+MAX_PARALLEL = 1
 
 USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
