@@ -294,37 +294,21 @@ async def _scroll_results(page):
         pass
 
 
-def _run_batch_subprocess(keyword, business_name, points):
+def _run_batch_direct(keyword, business_name, points):
     """
-    מריץ batch בתהליך-בן נפרד.
-    כל הזיכרון (כולל כרומיום) משתחרר כשהתהליך מסתיים.
+    מריץ batch ישירות (לא subprocess) — משתמש ב-asyncio.
+    יותר אמין מ-subprocess על Render free tier.
     """
-    batch_input = json.dumps({
-        'keyword': keyword,
-        'business_name': business_name,
-        'points': points
-    })
-
     try:
-        result = subprocess.run(
-            [sys.executable, os.path.abspath(__file__), '--batch-worker'],
-            input=batch_input,
-            capture_output=True,
-            text=True,
-            timeout=300  # 5 דקות timeout ל-batch (12 נקודות)
-        )
-
-        if result.returncode == 0 and result.stdout.strip():
-            return json.loads(result.stdout.strip())
-        else:
-            print(f"  Subprocess error: {result.stderr[:500]}", flush=True)
-            # החזר rank 20 לכל הנקודות
-            return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
-    except subprocess.TimeoutExpired:
-        print(f"  Subprocess timeout for batch of {len(points)} points", flush=True)
-        return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
+        loop = asyncio.new_event_loop()
+        results = loop.run_until_complete(_run_batch_async(keyword, business_name, points))
+        loop.close()
+        gc.collect()
+        return results
     except Exception as e:
-        print(f"  Subprocess failed: {e}", flush=True)
+        print(f"  Batch failed: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
 
 
@@ -392,45 +376,27 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
         total_batches = len(all_batches)
         print(f"  📦 {total_batches} batches, running {MAX_PARALLEL} in parallel", flush=True)
 
-        # הרץ batches במקביל — MAX_PARALLEL בו-זמנית
-        batch_idx = 0
-        while batch_idx < total_batches:
-            # קח את הקבוצה הבאה של batches להרצה מקבילית
-            parallel_slice = all_batches[batch_idx:batch_idx + MAX_PARALLEL]
-            slice_size = len(parallel_slice)
+        # הרץ batches ברצף — batch אחד בכל פעם (ריצה ישירה, לא subprocess)
+        for batch_idx, batch_points in enumerate(all_batches):
+            print(f"\n  🚀 Batch {batch_idx + 1}/{total_batches} ({len(batch_points)} points)", flush=True)
 
-            print(f"\n  🚀 Parallel group {batch_idx // MAX_PARALLEL + 1}: "
-                  f"batches {batch_idx + 1}-{batch_idx + slice_size}/{total_batches}", flush=True)
+            batch_results = _run_batch_direct(keyword, business_name, batch_points)
 
-            with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as executor:
-                futures = {}
-                for i, batch_points in enumerate(parallel_slice):
-                    future = executor.submit(
-                        _run_batch_subprocess, keyword, business_name, batch_points
-                    )
-                    futures[future] = (batch_idx + i, batch_points)
+            for result in batch_results:
+                point = result['point']
+                rank = result['rank']
+                businesses = result.get('businesses', [])
 
-                for future in as_completed(futures):
-                    b_idx, b_points = futures[future]
-                    batch_results = future.result()
+                print(f"    📍 ({point['lat']:.4f},{point['lng']:.4f}) → rank {rank} ({len(businesses)} biz)")
 
-                    for result in batch_results:
-                        point = result['point']
-                        rank = result['rank']
-                        businesses = result.get('businesses', [])
+                _save_result(conn, scan_id, point, rank, businesses)
+                rank_sum += rank
+                completed += 1
 
-                        print(f"    📍 ({point['lat']:.4f},{point['lng']:.4f}) → rank {rank} ({len(businesses)} biz)")
-
-                        _save_result(conn, scan_id, point, rank, businesses)
-                        rank_sum += rank
-                        completed += 1
-
-                    conn.execute("UPDATE scans SET status=? WHERE id=?",
-                                (f'running:{completed}/{total}', scan_id))
-                    conn.commit()
-                    print(f"  ✅ Batch {b_idx + 1} done. Progress: {completed}/{total}", flush=True)
-
-            batch_idx += slice_size
+            conn.execute("UPDATE scans SET status=? WHERE id=?",
+                        (f'running:{completed}/{total}', scan_id))
+            conn.commit()
+            print(f"  ✅ Batch {batch_idx + 1} done. Progress: {completed}/{total}", flush=True)
             gc.collect()
 
         # חשב ממוצע על כל התוצאות (כולל מסריקה קודמת אם זה resume)
