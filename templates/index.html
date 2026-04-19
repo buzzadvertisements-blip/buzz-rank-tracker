@@ -77,6 +77,13 @@
   }
   .biz-item:hover { background: #252849; }
   .biz-item.active { background: #252849; border-left-color: #6366f1; }
+  .biz-delete-btn {
+    background: none; border: none; color: #64748b; cursor: pointer;
+    font-size: 16px; padding: 2px 6px; border-radius: 4px; opacity: 0;
+    transition: all .15s; flex-shrink: 0;
+  }
+  .biz-item:hover .biz-delete-btn { opacity: 1; }
+  .biz-delete-btn:hover { color: #f87171; background: rgba(248,113,113,0.1); }
   .biz-icon {
     width: 32px; height: 32px; border-radius: 50%;
     background: #312e81; display: flex; align-items: center;
@@ -476,8 +483,12 @@
   <!-- Scan info card (Enhanced with distribution) -->
   <div id="scan-info">
     <h3 id="si-business">—</h3>
+    <div style="margin-bottom:10px">
+      <select id="si-scan-selector" style="width:100%;padding:6px 8px;border-radius:6px;background:#252849;border:1px solid #3d4172;color:#e2e8f0;font-size:11px;cursor:pointer" onchange="loadScanHeatmap(parseInt(this.value))"></select>
+    </div>
     <div class="info-row"><span class="info-label">Keyword</span><span class="info-val" id="si-keyword">—</span></div>
-    <div class="info-row"><span class="info-label">Address</span><span class="info-val" id="si-address">—</span></div>
+    <div class="info-row"><span class="info-label">Grid</span><span class="info-val" id="si-grid">—</span></div>
+    <div class="info-row"><span class="info-label">Date</span><span class="info-val" id="si-date">—</span></div>
     <div class="avg-score" id="si-score">—</div>
     <div class="avg-label">Average Ranking Score (lower = better)</div>
 
@@ -680,10 +691,30 @@ function renderBusinessList(filter = '') {
     return;
   }
 
-  list.innerHTML = filtered.map(b => '<div class="biz-item ' + (b.id === activeBizId ? 'active' : '') + '" onclick="selectBusiness(' + b.id + ')"><div class="biz-icon">' + b.name.charAt(0) + '</div><div style="overflow:hidden"><div class="biz-name">' + b.name + '</div><div class="biz-addr">' + b.address + '</div></div></div>').join('');
+  list.innerHTML = filtered.map(b => '<div class="biz-item ' + (b.id === activeBizId ? 'active' : '') + '" onclick="selectBusiness(' + b.id + ')"><div class="biz-icon">' + b.name.charAt(0) + '</div><div style="overflow:hidden;flex:1"><div class="biz-name">' + b.name + '</div><div class="biz-addr">' + b.address + '</div></div><button class="biz-delete-btn" onclick="event.stopPropagation();deleteBusiness(' + b.id + ',\'' + b.name.replace(/'/g, "\\'") + '\')" title="Delete business">×</button></div>').join('');
 }
 
 function filterBusinesses(val) { renderBusinessList(val); }
+
+async function deleteBusiness(id, name) {
+  if (!confirm('Delete "' + name + '" and all its scans?')) return;
+  try {
+    await fetch('/api/businesses/' + id, { method: 'DELETE' });
+    businesses = businesses.filter(b => b.id !== id);
+    if (activeBizId === id) {
+      activeBizId = null;
+      currentTrackedBusinessId = null;
+      document.getElementById('topbar-title').textContent = 'Select a business to start scanning';
+      document.getElementById('btn-scan-now').style.display = 'none';
+      document.getElementById('scan-info').style.display = 'none';
+      document.getElementById('scan-tabs').style.display = 'none';
+      clearHeatmap();
+    }
+    renderBusinessList();
+  } catch (e) {
+    alert('Error deleting business: ' + e.message);
+  }
+}
 
 // ── Select Business ────────────────────────────────────────────────────────────
 async function selectBusiness(id) {
@@ -699,11 +730,19 @@ async function selectBusiness(id) {
 
   const r = await fetch('/api/scans?business_id=' + id);
   const scans = await r.json();
+  // Populate scan selector
+  const sel = document.getElementById('si-scan-selector');
+  sel.innerHTML = scans.filter(s => s.status === 'done').map(s => {
+    const d = s.completed_at || s.created_at;
+    const label = s.keyword + ' · ' + s.grid_size + '×' + s.grid_size + ' · ' + (d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '');
+    return '<option value="' + s.id + '">' + label + '</option>';
+  }).join('');
   if (scans.length > 0) {
     loadScanHeatmap(scans[0].id);
   } else {
     clearHeatmap();
     document.getElementById('scan-info').style.display = 'none';
+    document.getElementById('scan-tabs').style.display = 'none';
   }
 }
 
@@ -766,6 +805,10 @@ async function loadScanHeatmap(scanId) {
   // Reset tabs to map view
   document.querySelectorAll('.scan-tab').forEach(t => t.classList.remove('active'));
   document.querySelector('.scan-tab[onclick*="map"]').classList.add('active');
+  showScanTab('map');
+  // Update selector if it exists
+  const sel = document.getElementById('si-scan-selector');
+  if (sel) sel.value = scanId;
 
   const [scanR, resultsR] = await Promise.all([
     fetch('/api/scans/' + scanId),
@@ -778,7 +821,9 @@ async function loadScanHeatmap(scanId) {
   si.style.display = 'block';
   document.getElementById('si-business').textContent = scan.business_name;
   document.getElementById('si-keyword').textContent  = scan.keyword;
-  document.getElementById('si-address').textContent  = scan.business_address || '—';
+  document.getElementById('si-grid').textContent = scan.grid_size + '×' + scan.grid_size + ' · ' + scan.spacing_km + ' km';
+  const scanDate = scan.completed_at || scan.created_at;
+  document.getElementById('si-date').textContent = scanDate ? new Date(scanDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
   const scoreEl = document.getElementById('si-score');
   if (scan.avg_rank) {
     scoreEl.textContent = Math.round(scan.avg_rank * 10) / 10;
