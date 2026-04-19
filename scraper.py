@@ -67,12 +67,12 @@ async def _extract_top_businesses(page, business_name: str, top_n: int = 5):
     """
     try:
         # חכה לfeed עם ילדים — לא רק לקיום ה-feed
-        await page.wait_for_selector('div[role="feed"] > :first-child', timeout=12000)
+        await page.wait_for_selector('div[role="feed"] > :first-child', timeout=8000)
     except:
         # אם אין feed, חכה עוד ונסה שוב
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)
         try:
-            await page.wait_for_selector('div[role="feed"] > :first-child', timeout=8000)
+            await page.wait_for_selector('div[role="feed"] > :first-child', timeout=5000)
         except:
             pass
 
@@ -255,7 +255,7 @@ def _run_batch_subprocess(keyword, business_name, points):
             input=batch_input,
             capture_output=True,
             text=True,
-            timeout=180
+            timeout=600
         )
 
         # תמיד הדפס stderr לדיבוג
