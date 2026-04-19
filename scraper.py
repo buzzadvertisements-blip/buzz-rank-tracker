@@ -211,7 +211,7 @@ async def _run_batch_async(keyword, business_name, points):
 
                 url = f"https://www.google.com/maps/search/{keyword_url}/@{point['lat']},{point['lng']},13z?hl=en"
                 try:
-                    await page.goto(url, timeout=25000, wait_until='load')
+                    await page.goto(url, timeout=25000, wait_until='domcontentloaded')
                     await asyncio.sleep(3)
 
                     rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
