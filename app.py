@@ -380,6 +380,75 @@ def resume_scan(scan_id):
     })
 
 
+@app.route('/api/debug-scrape', methods=['POST'])
+def debug_scrape():
+    """דיבוג — מריץ סריקה של נקודה אחת ומחזיר את ה-HTML של הדף"""
+    import asyncio
+    from playwright.async_api import async_playwright
+
+    data = request.json or {}
+    lat = data.get('lat', 36.0970)
+    lng = data.get('lng', -80.2453)
+    keyword = data.get('keyword', 'Air Duct Cleaning Near Me')
+    keyword_url = '+'.join(keyword.strip().split())
+
+    async def _debug():
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True, args=[
+                '--no-sandbox', '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage', '--disable-gpu',
+                '--single-process', '--window-size=1280,720',
+            ])
+            context = await browser.new_context(
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                viewport={'width': 1280, 'height': 720},
+                locale='en-US',
+                timezone_id='America/New_York',
+                geolocation={'latitude': lat, 'longitude': lng},
+                permissions=['geolocation'],
+            )
+            page = await context.new_page()
+            url = f"https://www.google.com/maps/search/{keyword_url}/@{lat},{lng},13z?hl=en"
+            await page.goto(url, timeout=25000, wait_until='domcontentloaded')
+            await asyncio.sleep(5)
+
+            # בדוק אם יש feed
+            feed = await page.query_selector('div[role="feed"]')
+            feed_exists = feed is not None
+
+            # שלוף כותרת, URL נוכחי, וטקסט ראשוני של הדף
+            title = await page.title()
+            current_url = page.url
+
+            # שלוף HTML קצר של body
+            body_text = await page.evaluate('() => document.body.innerText.substring(0, 3000)')
+
+            # בדוק אם יש consent dialog
+            consent = await page.query_selector('form[action*="consent"]')
+            consent_exists = consent is not None
+
+            # בדוק כמה ילדים יש ב-feed
+            feed_children = 0
+            if feed_exists:
+                feed_children = await page.evaluate('() => { const f = document.querySelector(\'div[role="feed"]\'); return f ? f.children.length : 0; }')
+
+            await browser.close()
+            return {
+                'url_loaded': url,
+                'current_url': current_url,
+                'title': title,
+                'feed_exists': feed_exists,
+                'feed_children': feed_children,
+                'consent_dialog': consent_exists,
+                'body_text_preview': body_text[:2000]
+            }
+
+    loop = asyncio.new_event_loop()
+    result = loop.run_until_complete(_debug())
+    loop.close()
+    return jsonify(result)
+
+
 @app.route('/api/scans/<int:scan_id>', methods=['DELETE'])
 def delete_scan(scan_id):
     db = get_db()
