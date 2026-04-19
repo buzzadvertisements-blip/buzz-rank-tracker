@@ -173,33 +173,6 @@ def _mock_rank():
 
 # ── עובד Subprocess — מריץ batch של נקודות בתהליך נפרד ──
 
-async def _handle_consent(page):
-    """מטפל בדיאלוג ההסכמה של גוגל אם מופיע"""
-    try:
-        # חפש כפתורי הסכמה שונים
-        consent_selectors = [
-            'button:has-text("Accept all")',
-            'button:has-text("Reject all")',
-            'button:has-text("I agree")',
-            'form[action*="consent"] button',
-            '[aria-label="Accept all"]',
-            'button:has-text("Agree")',
-        ]
-        for sel in consent_selectors:
-            try:
-                btn = page.locator(sel).first
-                if await btn.is_visible(timeout=1000):
-                    await btn.click()
-                    print(f"  [consent] Clicked: {sel}", file=sys.stderr)
-                    await asyncio.sleep(1)
-                    return True
-            except:
-                continue
-    except:
-        pass
-    return False
-
-
 async def _run_batch_async(keyword, business_name, points):
     """מריץ batch של נקודות בדפדפן אחד — context אחד, cookies נשמרים"""
     results = []
@@ -221,42 +194,6 @@ async def _run_batch_async(keyword, business_name, points):
         await page.route('**/recaptcha/**', lambda route: route.abort())
 
         try:
-            # חימום — טעינה ראשונה של גוגל מפות לקבל cookies ולטפל בהסכמה
-            warmup_url = f"https://www.google.com/maps/search/{keyword_url}/@{points[0]['lat']},{points[0]['lng']},13z?hl=en"
-            print(f"  [warmup] Loading: {warmup_url}", file=sys.stderr)
-            await page.goto(warmup_url, timeout=25000, wait_until='domcontentloaded')
-            await asyncio.sleep(2)
-
-            # טפל בדיאלוג הסכמה
-            await _handle_consent(page)
-
-            # בדוק שה-feed קיים אחרי חימום
-            try:
-                await page.wait_for_selector('div[role="feed"]', timeout=10000)
-                feed_check = await page.evaluate('''() => {
-                    const feed = document.querySelector('div[role="feed"]');
-                    return feed ? feed.children.length : -1;
-                }''')
-                print(f"  [warmup] Feed children: {feed_check}", file=sys.stderr)
-            except Exception as e:
-                print(f"  [warmup] No feed found: {e}", file=sys.stderr)
-                # נסה consent שוב
-                await _handle_consent(page)
-                await asyncio.sleep(2)
-
-                # בדוק מה יש בדף
-                page_info = await page.evaluate('''() => {
-                    return {
-                        url: window.location.href,
-                        title: document.title,
-                        bodyLen: document.body.innerText.length,
-                        bodyPreview: document.body.innerText.substring(0, 300),
-                        hasFeed: !!document.querySelector('div[role="feed"]'),
-                        hasConsent: !!document.querySelector('form[action*="consent"]'),
-                    };
-                }''')
-                print(f"  [warmup] Page state: {json.dumps(page_info, ensure_ascii=False)}", file=sys.stderr)
-
             for i, point in enumerate(points):
                 # עדכן geolocation
                 await context.set_geolocation(
@@ -266,10 +203,47 @@ async def _run_batch_async(keyword, business_name, points):
                 url = f"https://www.google.com/maps/search/{keyword_url}/@{point['lat']},{point['lng']},13z?hl=en"
                 try:
                     await page.goto(url, timeout=20000, wait_until='domcontentloaded')
-                    await asyncio.sleep(random.uniform(2.0, 3.0))
 
-                    # בדיקת consent שוב (גוגל יכול להציג שוב)
-                    await _handle_consent(page)
+                    # בנקודה הראשונה — חכה יותר וטפל בהסכמה עם JS
+                    if i == 0:
+                        await asyncio.sleep(3)
+                        # טיפול בהסכמה עם JavaScript בלבד (ללא :has-text)
+                        consent_result = await page.evaluate('''() => {
+                            // חפש כפתורי הסכמה
+                            const buttons = document.querySelectorAll('button');
+                            for (const btn of buttons) {
+                                const text = (btn.innerText || '').toLowerCase().trim();
+                                if (text === 'accept all' || text === 'reject all' ||
+                                    text === 'i agree' || text === 'agree' ||
+                                    text === 'accept' || text === 'consent') {
+                                    btn.click();
+                                    return 'clicked: ' + text;
+                                }
+                            }
+                            // חפש גם בטפסי consent
+                            const form = document.querySelector('form[action*="consent"]');
+                            if (form) {
+                                const submitBtn = form.querySelector('button');
+                                if (submitBtn) { submitBtn.click(); return 'clicked consent form button'; }
+                            }
+                            return 'no consent dialog found';
+                        }''')
+                        print(f"  [consent] {consent_result}", file=sys.stderr)
+                        await asyncio.sleep(1)
+                    else:
+                        await asyncio.sleep(random.uniform(2.0, 3.0))
+
+                    # דיבוג: בדוק מצב הדף
+                    page_state = await page.evaluate('''() => {
+                        const feed = document.querySelector('div[role="feed"]');
+                        return {
+                            hasFeed: !!feed,
+                            feedChildren: feed ? feed.children.length : 0,
+                            url: window.location.href.substring(0, 80),
+                            title: document.title.substring(0, 50),
+                        };
+                    }''')
+                    print(f"  [point {i+1}/{len(points)}] feed={page_state['hasFeed']}, children={page_state['feedChildren']}", file=sys.stderr)
 
                     rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
                     print(f"  [point {i+1}/{len(points)}] ({point['lat']:.4f},{point['lng']:.4f}) → rank={rank}, biz={len(businesses)}", file=sys.stderr)
