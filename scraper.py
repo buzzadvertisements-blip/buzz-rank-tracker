@@ -275,7 +275,7 @@ async def _run_batch_async(keyword, business_name, points):
                         except Exception as de:
                             print(f"  [{i+1}/{len(points)}] diag error: {de}", file=sys.stderr, flush=True)
 
-                        await asyncio.sleep(5)
+                        await asyncio.sleep(3)
                         rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
 
                     print(f"  [{i+1}/{len(points)}] ({point['lat']:.4f},{point['lng']:.4f}) → rank={rank}", file=sys.stderr, flush=True)
@@ -311,7 +311,7 @@ def _run_batch_subprocess(keyword, business_name, points):
             input=batch_input,
             capture_output=True,
             text=True,
-            timeout=180
+            timeout=300
         )
 
         # תמיד הדפס stderr לדיבוג
