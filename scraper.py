@@ -30,7 +30,7 @@ BROWSER_ARGS = [
 ]
 
 # כמה נקודות לעבד בכל תהליך-בן (subprocess)
-BATCH_SIZE = 3
+BATCH_SIZE = 5
 
 # כמה תהליכי-בן להריץ במקביל (Render free = 512MB, כרומיום צורך ~200MB)
 MAX_PARALLEL = 1
@@ -208,7 +208,7 @@ async def _run_batch_async(keyword, business_name, points):
             warmup_url = f"https://www.google.com/maps/search/{keyword_url}/@{points[0]['lat']},{points[0]['lng']},13z?hl=en"
             print(f"  [warmup] navigating to Maps...", file=sys.stderr, flush=True)
             await page.goto(warmup_url, timeout=25000, wait_until='domcontentloaded')
-            await asyncio.sleep(3)
+            await asyncio.sleep(2)
 
             # טפל בדיאלוג consent
             try:
@@ -225,21 +225,33 @@ async def _run_batch_async(keyword, business_name, points):
                 }''')
                 if accepted:
                     print(f"  [warmup] consent accepted!", file=sys.stderr, flush=True)
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(2)
                 else:
                     print(f"  [warmup] no consent dialog found", file=sys.stderr, flush=True)
             except Exception as ce:
                 print(f"  [warmup] consent check error: {ce}", file=sys.stderr, flush=True)
 
-            # חכה שה-feed ייטען כחימום
+            # חכה שה-feed ייטען כחימום — וגם חלץ תוצאות של נקודה ראשונה
+            warmup_rank, warmup_biz = 20, []
             try:
-                await page.wait_for_selector('div[role="feed"] > :first-child', timeout=8000)
-                print(f"  [warmup] feed loaded OK", file=sys.stderr, flush=True)
+                await page.wait_for_selector('div[role="feed"] > :first-child', timeout=6000)
+                print(f"  [warmup] feed loaded OK — extracting first point", file=sys.stderr, flush=True)
+                warmup_rank, warmup_biz = await _extract_top_businesses(page, business_name, top_n=5)
+                if warmup_rank == 20 and len(warmup_biz) == 0:
+                    await asyncio.sleep(2)
+                    warmup_rank, warmup_biz = await _extract_top_businesses(page, business_name, top_n=5)
             except:
                 print(f"  [warmup] feed not loaded after warmup", file=sys.stderr, flush=True)
 
-            # ── סריקה של כל הנקודות ──
-            for i, point in enumerate(points):
+            print(f"  [1/{len(points)}] ({points[0]['lat']:.4f},{points[0]['lng']:.4f}) → rank={warmup_rank} (from warmup)", file=sys.stderr, flush=True)
+            results.append({
+                'point': points[0],
+                'rank': warmup_rank,
+                'businesses': warmup_biz
+            })
+
+            # ── סריקה של שאר הנקודות (דילוג על הראשונה) ──
+            for i, point in enumerate(points[1:], start=1):
                 await context.set_geolocation(
                     {'latitude': point['lat'], 'longitude': point['lng']}
                 )
@@ -247,35 +259,14 @@ async def _run_batch_async(keyword, business_name, points):
                 url = f"https://www.google.com/maps/search/{keyword_url}/@{point['lat']},{point['lng']},13z?hl=en"
                 try:
                     await page.goto(url, timeout=25000, wait_until='domcontentloaded')
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(3)
 
                     rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
 
                     # retry: אם נכשל, חכה ונסה שוב
                     if rank == 20 and len(businesses) == 0:
-                        print(f"  [{i+1}/{len(points)}] retry — dumping page state...", file=sys.stderr, flush=True)
-                        # דיאגנוסטיקה: הדפס מצב הדף
-                        try:
-                            diag = await page.evaluate('''() => {
-                                const feed = document.querySelector('div[role="feed"]');
-                                const consent = document.querySelector('form[action*="consent"]');
-                                const bodyText = document.body.innerText.substring(0, 500);
-                                return {
-                                    hasFeed: !!feed,
-                                    feedChildren: feed ? feed.children.length : 0,
-                                    hasConsent: !!consent,
-                                    url: window.location.href,
-                                    title: document.title,
-                                    bodyPreview: bodyText
-                                };
-                            }''')
-                            print(f"  [{i+1}/{len(points)}] diag: feed={diag.get('hasFeed')}, children={diag.get('feedChildren')}, consent={diag.get('hasConsent')}, title={diag.get('title','')[:60]}", file=sys.stderr, flush=True)
-                            if diag.get('feedChildren', 0) == 0:
-                                print(f"  [{i+1}/{len(points)}] body: {diag.get('bodyPreview','')[:300]}", file=sys.stderr, flush=True)
-                        except Exception as de:
-                            print(f"  [{i+1}/{len(points)}] diag error: {de}", file=sys.stderr, flush=True)
-
-                        await asyncio.sleep(3)
+                        print(f"  [{i+1}/{len(points)}] retry...", file=sys.stderr, flush=True)
+                        await asyncio.sleep(2)
                         rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
 
                     print(f"  [{i+1}/{len(points)}] ({point['lat']:.4f},{point['lng']:.4f}) → rank={rank}", file=sys.stderr, flush=True)
@@ -421,7 +412,7 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
             gc.collect()
             # השהיה בין batches כדי לתת ל-OS לשחרר זיכרון
             if batch_idx < total_batches - 1:
-                time.sleep(3)
+                time.sleep(2)
 
         # חשב ממוצע על כל התוצאות (כולל מסריקה קודמת אם זה resume)
         all_ranks = conn.execute(

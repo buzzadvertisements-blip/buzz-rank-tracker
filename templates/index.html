@@ -6,6 +6,7 @@
 <title>BUZZ Rank Tracker</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -192,6 +193,18 @@
   .dist-weak { background: #e67e22; }
   .dist-poor { background: #e74c3c; }
   .dist-notfound { background: #8e1a0e; }
+
+  /* Rank history chart */
+  .history-section {
+    margin-top: 14px; border-top: 1px solid #2d3154; padding-top: 12px;
+  }
+  .history-title {
+    font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .history-chart-wrap {
+    height: 160px; position: relative;
+  }
 
   /* ── BUSINESS PANEL (Right side) ── */
   .biz-panel {
@@ -450,6 +463,13 @@
         <div class="dist-fill">
           <div class="dist-progress dist-notfound" id="dist-notfound" style="width:0%"></div>
         </div>
+      </div>
+    </div>
+
+    <div class="history-section" id="history-section" style="display:none">
+      <div class="history-title">Ranking Trend</div>
+      <div class="history-chart-wrap">
+        <canvas id="history-chart"></canvas>
       </div>
     </div>
   </div>
@@ -713,6 +733,19 @@ async function loadScanHeatmap(scanId) {
     console.log('Distribution not available:', e);
   }
 
+  // Load rank history chart
+  try {
+    const histR = await fetch('/api/businesses/' + scan.business_id + '/rank-history?keyword=' + encodeURIComponent(scan.keyword));
+    const history = await histR.json();
+    if (history.length >= 2) {
+      renderRankHistory(history, scanId);
+    } else {
+      document.getElementById('history-section').style.display = 'none';
+    }
+  } catch (e) {
+    console.log('History not available:', e);
+  }
+
   results.forEach(pt => {
     const color = rankColor(pt.rank);
     const m = L.circleMarker([pt.lat, pt.lng], {
@@ -771,6 +804,71 @@ function renderDistribution(dist) {
     if (el) {
       el.style.width = pct + '%';
       el.textContent = pct > 5 ? pct + '%' : '';
+    }
+  });
+}
+
+// ── Rank History Chart ────────────────────────────────────────────────────────
+let historyChart = null;
+function renderRankHistory(history, currentScanId) {
+  const section = document.getElementById('history-section');
+  section.style.display = 'block';
+
+  const labels = history.map(h => {
+    const d = new Date(h.date);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  });
+  const data = history.map(h => h.avg_rank);
+  const pointColors = history.map(h =>
+    h.scan_id === currentScanId ? '#6366f1' : 'rgba(99,102,241,0.5)'
+  );
+  const pointRadii = history.map(h =>
+    h.scan_id === currentScanId ? 6 : 3
+  );
+
+  if (historyChart) historyChart.destroy();
+
+  const ctx = document.getElementById('history-chart').getContext('2d');
+  historyChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor: '#6366f1',
+        backgroundColor: 'rgba(99,102,241,0.1)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.3,
+        pointBackgroundColor: pointColors,
+        pointRadius: pointRadii,
+        pointHoverRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => 'Avg Rank: ' + ctx.parsed.y
+          }
+        }
+      },
+      scales: {
+        y: {
+          reverse: true,
+          min: 1,
+          max: 20,
+          ticks: { color: '#64748b', font: { size: 10 } },
+          grid: { color: 'rgba(45,49,84,0.5)' }
+        },
+        x: {
+          ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 0 },
+          grid: { display: false }
+        }
+      }
     }
   });
 }

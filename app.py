@@ -289,6 +289,36 @@ def get_scan_distribution(scan_id):
     return jsonify(dist)
 
 
+@app.route('/api/businesses/<int:business_id>/rank-history', methods=['GET'])
+def get_rank_history(business_id):
+    """מחזיר היסטוריית דירוגים ממוצעים לעסק — לגרף לאורך זמן"""
+    db = get_db()
+    keyword = request.args.get('keyword', '')
+    query = '''
+        SELECT id, keyword, avg_rank, grid_size, created_at, completed_at
+        FROM scans
+        WHERE business_id=? AND status='done' AND avg_rank IS NOT NULL
+    '''
+    params = [business_id]
+    if keyword:
+        query += ' AND keyword=?'
+        params.append(keyword)
+    query += ' ORDER BY created_at ASC'
+    rows = db.execute(query, params).fetchall()
+    db.close()
+
+    history = []
+    for r in rows:
+        history.append({
+            'scan_id': r['id'],
+            'keyword': r['keyword'],
+            'avg_rank': r['avg_rank'],
+            'grid_size': r['grid_size'],
+            'date': r['completed_at'] or r['created_at']
+        })
+    return jsonify(history)
+
+
 @app.route('/api/scans/cleanup', methods=['POST'])
 def cleanup_stuck_scans():
     """סימון כל הסריקות התקועות כ-error"""
