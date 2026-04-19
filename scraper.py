@@ -30,7 +30,7 @@ BROWSER_ARGS = [
 ]
 
 # כמה נקודות לעבד בכל תהליך-בן (subprocess)
-BATCH_SIZE = 4
+BATCH_SIZE = 2
 
 # כמה תהליכי-בן להריץ במקביל (Render free = 512MB, כרומיום צורך ~200MB)
 MAX_PARALLEL = 1
@@ -296,7 +296,7 @@ def _run_batch_subprocess(keyword, business_name, points):
             input=batch_input,
             capture_output=True,
             text=True,
-            timeout=600
+            timeout=180
         )
 
         # תמיד הדפס stderr לדיבוג

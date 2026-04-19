@@ -449,6 +449,44 @@ def debug_scrape():
     return jsonify(result)
 
 
+@app.route('/api/test-subprocess', methods=['POST'])
+def test_subprocess():
+    """בודק subprocess בודד עם נקודה אחת ומחזיר את ה-stderr"""
+    import subprocess as sp
+    import json as js
+
+    data = request.json or {}
+    lat = data.get('lat', 36.0970)
+    lng = data.get('lng', -80.2453)
+    keyword = data.get('keyword', 'Air Duct Cleaning Near Me')
+    business_name = data.get('business_name', 'Precision Air Care')
+
+    batch_input = js.dumps({
+        'keyword': keyword,
+        'business_name': business_name,
+        'points': [{'lat': lat, 'lng': lng, 'row': 0, 'col': 0}]
+    })
+
+    try:
+        result = sp.run(
+            [sys.executable, os.path.abspath('scraper.py'), '--batch-worker'],
+            input=batch_input,
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+        return jsonify({
+            'returncode': result.returncode,
+            'stdout': result.stdout[:2000] if result.stdout else '',
+            'stderr': result.stderr[:3000] if result.stderr else '',
+            'success': result.returncode == 0
+        })
+    except sp.TimeoutExpired:
+        return jsonify({'error': 'subprocess timeout (120s)', 'success': False})
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False})
+
+
 @app.route('/api/scans/<int:scan_id>', methods=['DELETE'])
 def delete_scan(scan_id):
     db = get_db()
