@@ -30,7 +30,7 @@ BROWSER_ARGS = [
 ]
 
 # כמה נקודות לעבד בכל תהליך-בן (subprocess)
-BATCH_SIZE = 12
+BATCH_SIZE = 8
 
 # כמה תהליכי-בן להריץ במקביל (Render free = 512MB, כרומיום צורך ~200MB)
 MAX_PARALLEL = 1
@@ -66,9 +66,9 @@ async def _extract_top_businesses(page, business_name: str, top_n: int = 5):
     מחזיר (rank, businesses_list)
     """
     try:
-        await page.wait_for_selector('div[role="feed"]', timeout=12000)
+        await page.wait_for_selector('div[role="feed"]', timeout=15000)
     except:
-        await asyncio.sleep(4)
+        await asyncio.sleep(5)
 
     try:
         items_data = await page.evaluate('''(topN) => {
@@ -180,23 +180,31 @@ async def _run_batch_async(keyword, business_name, points):
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=BROWSER_ARGS)
-        context = await browser.new_context(
-            user_agent=random.choice(USER_AGENTS),
-            viewport={'width': 1280, 'height': 720},
-            locale='en-US',
-            timezone_id='America/Denver',
-        )
-        page = await context.new_page()
-        await page.route('**/*.{png,jpg,jpeg,gif,webp,svg,mp4,woff,woff2}',
-                        lambda route: route.abort())
-        await page.route('**/recaptcha/**', lambda route: route.abort())
 
         try:
             for point in points:
+                # ── יצירת context חדש לכל נקודה עם geolocation מדויק ──
+                context = await browser.new_context(
+                    user_agent=random.choice(USER_AGENTS),
+                    viewport={'width': 1280, 'height': 720},
+                    locale='en-US',
+                    timezone_id='America/New_York',
+                    geolocation={'latitude': point['lat'], 'longitude': point['lng']},
+                    permissions=['geolocation'],
+                )
+                page = await context.new_page()
+                await page.route('**/*.{png,jpg,jpeg,gif,webp,svg,mp4,woff,woff2}',
+                                lambda route: route.abort())
+                await page.route('**/recaptcha/**', lambda route: route.abort())
+
                 url = f"https://www.google.com/maps/search/{keyword_url}/@{point['lat']},{point['lng']},14z?hl=en"
                 try:
-                    await page.goto(url, timeout=20000, wait_until='domcontentloaded')
-                    await asyncio.sleep(random.uniform(0.5, 1.2))
+                    await page.goto(url, timeout=25000, wait_until='domcontentloaded')
+                    await asyncio.sleep(random.uniform(2.0, 3.5))
+
+                    # ── גלילה ברשימת התוצאות כדי לטעון עוד עסקים ──
+                    await _scroll_results(page)
+
                     rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
                 except Exception as e:
                     print(f"  Error at ({point['lat']},{point['lng']}): {e}", file=sys.stderr)
@@ -207,11 +215,28 @@ async def _run_batch_async(keyword, business_name, points):
                     'rank': rank,
                     'businesses': businesses
                 })
-                await asyncio.sleep(random.uniform(0.3, 0.8))
+
+                await context.close()
+                await asyncio.sleep(random.uniform(0.5, 1.0))
         finally:
             await browser.close()
 
     return results
+
+
+async def _scroll_results(page):
+    """גולל את רשימת התוצאות ב-Google Maps כדי לטעון עוד עסקים"""
+    try:
+        feed = await page.query_selector('div[role="feed"]')
+        if not feed:
+            return
+
+        # גלול 3 פעמים כדי לטעון עד ~20 תוצאות
+        for _ in range(3):
+            await feed.evaluate('el => el.scrollTop = el.scrollHeight')
+            await asyncio.sleep(0.8)
+    except Exception:
+        pass
 
 
 def _run_batch_subprocess(keyword, business_name, points):
