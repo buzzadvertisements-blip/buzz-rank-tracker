@@ -40,6 +40,13 @@ def _resume_stuck_scans():
             ).fetchall()
             completed_set = {(r['grid_row'], r['grid_col']) for r in completed_points}
 
+            # סריקה שנכשלה לפני שהספיקה להתקדם — סמן כשגיאה ואל תנסה שוב
+            if len(completed_set) == 0:
+                db.execute("UPDATE scans SET status='error' WHERE id=?", (scan_id,))
+                db.commit()
+                print(f"⚠️ Scan #{scan_id} had 0 progress — marked as error (OOM crash?)")
+                continue
+
             # צור מחדש את כל נקודות הגריד
             all_points = generate_grid(
                 scan_dict['lat'], scan_dict['lng'],
@@ -340,6 +347,23 @@ def get_scan_distribution(scan_id):
         else:            dist['not_found'] += 1
 
     return jsonify(dist)
+
+
+@app.route('/api/scans/cleanup', methods=['POST'])
+def cleanup_stuck_scans():
+    """סימון כל הסריקות התקועות כ-error"""
+    db = get_db()
+    stuck = db.execute(
+        "SELECT id, status FROM scans WHERE status LIKE 'running:%'"
+    ).fetchall()
+    cleaned = []
+    for s in stuck:
+        sd = dict(s)
+        db.execute("UPDATE scans SET status='error' WHERE id=?", (sd['id'],))
+        cleaned.append(sd['id'])
+    db.commit()
+    db.close()
+    return jsonify({'cleaned': cleaned, 'count': len(cleaned)})
 
 
 @app.route('/api/scans/<int:scan_id>/resume', methods=['POST'])
