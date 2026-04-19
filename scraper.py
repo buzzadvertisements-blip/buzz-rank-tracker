@@ -204,7 +204,10 @@ async def _run_batch_async(keyword, business_name, points):
         page = await context.new_page()
 
         try:
-            # ── חימום: נווט לגוגל מפות וטפל ב-consent לפני הסריקה ──
+            # ── חימום: נווט לגוגל מפות וטפל ב-consent בלבד (בלי חילוץ) ──
+            # הערה: לא משתמשים בתוצאת warmup בתור הנקודה הראשונה, כי גילינו חוסר עקביות
+            # בין סריקות (הנקודה הראשונה של batch 1+ לא הייתה מחזירה דירוג תקין).
+            # במקום זאת — warmup רק לconsent/cold-start, וכל נקודה מקבלת ניווט משלה.
             warmup_url = f"https://www.google.com/maps/search/{keyword_url}/@{points[0]['lat']},{points[0]['lng']},13z?hl=en"
             print(f"  [warmup] navigating to Maps...", file=sys.stderr, flush=True)
             await page.goto(warmup_url, timeout=25000, wait_until='domcontentloaded')
@@ -231,42 +234,8 @@ async def _run_batch_async(keyword, business_name, points):
             except Exception as ce:
                 print(f"  [warmup] consent check error: {ce}", file=sys.stderr, flush=True)
 
-            # חכה שה-feed ייטען כחימום — וגם חלץ תוצאות של נקודה ראשונה
-            # הערה: warmup צריך יותר זמן מהניווטים הבאים (cold cache + consent flow)
-            warmup_rank, warmup_biz = 20, []
-            try:
-                await page.wait_for_selector('div[role="feed"] > :first-child', timeout=10000)
-                await asyncio.sleep(1)  # זמן לטעינת מספר תוצאות ולא רק הראשונה
-                print(f"  [warmup] feed loaded OK — extracting first point", file=sys.stderr, flush=True)
-                warmup_rank, warmup_biz = await _extract_top_businesses(page, business_name, top_n=5)
-                # אם הפיד לא נטען מלא (rank=20 עם פחות מ-3 עסקים = טעינה חלקית) — reload
-                if warmup_rank == 20 and len(warmup_biz) < 3:
-                    print(f"  [warmup] partial extract ({len(warmup_biz)} biz) — reloading page...", file=sys.stderr, flush=True)
-                    await page.goto(warmup_url, timeout=25000, wait_until='domcontentloaded')
-                    await asyncio.sleep(3)
-                    warmup_rank, warmup_biz = await _extract_top_businesses(page, business_name, top_n=5)
-            except Exception as we:
-                print(f"  [warmup] feed not loaded after warmup: {we}", file=sys.stderr, flush=True)
-
-            # fallback אחרון: אם warmup עדיין חלקי — עשה ניווט רגיל כמו שאר הנקודות
-            if warmup_rank == 20 and len(warmup_biz) < 3:
-                print(f"  [warmup] fallback — standard navigation for first point", file=sys.stderr, flush=True)
-                try:
-                    await page.goto(warmup_url, timeout=25000, wait_until='domcontentloaded')
-                    await asyncio.sleep(3)
-                    warmup_rank, warmup_biz = await _extract_top_businesses(page, business_name, top_n=5)
-                except Exception as fe:
-                    print(f"  [warmup] fallback failed: {fe}", file=sys.stderr, flush=True)
-
-            print(f"  [1/{len(points)}] ({points[0]['lat']:.4f},{points[0]['lng']:.4f}) → rank={warmup_rank} (from warmup)", file=sys.stderr, flush=True)
-            results.append({
-                'point': points[0],
-                'rank': warmup_rank,
-                'businesses': warmup_biz
-            })
-
-            # ── סריקה של שאר הנקודות (דילוג על הראשונה) ──
-            for i, point in enumerate(points[1:], start=1):
+            # ── סריקה של כל הנקודות (כולל הראשונה) — ניווט אחיד לכולן ──
+            for i, point in enumerate(points):
                 await context.set_geolocation(
                     {'latitude': point['lat'], 'longitude': point['lng']}
                 )
@@ -278,11 +247,11 @@ async def _run_batch_async(keyword, business_name, points):
 
                     rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
 
-                    # retry: אם נכשל או טעינה חלקית (<3 עסקים), reload ונסה שוב
-                    if rank == 20 and len(businesses) < 3:
+                    # retry: אם נכשל או טעינה חלקית (<5 עסקים), reload ונסה שוב
+                    if rank == 20 and len(businesses) < 5:
                         print(f"  [{i+1}/{len(points)}] partial ({len(businesses)} biz) — reload+retry...", file=sys.stderr, flush=True)
                         await page.goto(url, timeout=25000, wait_until='domcontentloaded')
-                        await asyncio.sleep(3)
+                        await asyncio.sleep(4)
                         rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
 
                     print(f"  [{i+1}/{len(points)}] ({point['lat']:.4f},{point['lng']:.4f}) → rank={rank}", file=sys.stderr, flush=True)
@@ -295,6 +264,7 @@ async def _run_batch_async(keyword, business_name, points):
                     'rank': rank,
                     'businesses': businesses
                 })
+
         finally:
             await browser.close()
 
