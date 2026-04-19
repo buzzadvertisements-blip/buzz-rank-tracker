@@ -263,40 +263,20 @@ async def _run_batch_async(keyword, business_name, points):
     return results
 
 
-def _run_batch_subprocess(keyword, business_name, points):
+def _run_batch_direct(keyword, business_name, points):
     """
-    מריץ batch בתהליך-בן נפרד.
-    כל הזיכרון (כולל כרומיום) משתחרר כשהתהליך מסתיים.
+    מריץ batch ישירות בתהליך הנוכחי עם asyncio.run().
+    debug-scrape הוכיח שזה עובד — subprocess לא.
     """
-    batch_input = json.dumps({
-        'keyword': keyword,
-        'business_name': business_name,
-        'points': points
-    })
-
     try:
-        result = subprocess.run(
-            [sys.executable, os.path.abspath(__file__), '--batch-worker'],
-            input=batch_input,
-            capture_output=True,
-            text=True,
-            timeout=300
-        )
-
-        # תמיד הדפס stderr לצורך דיבוג
-        if result.stderr and result.stderr.strip():
-            print(f"  [subprocess stderr]:\n{result.stderr[:2000]}", flush=True)
-
-        if result.returncode == 0 and result.stdout.strip():
-            return json.loads(result.stdout.strip())
-        else:
-            print(f"  Subprocess error (rc={result.returncode})", flush=True)
-            return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
-    except subprocess.TimeoutExpired:
-        print(f"  Subprocess timeout for batch of {len(points)} points", flush=True)
-        return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
+        print(f"  [direct] Running batch of {len(points)} points...", flush=True)
+        results = asyncio.run(_run_batch_async(keyword, business_name, points))
+        print(f"  [direct] Batch done, got {len(results)} results", flush=True)
+        return results
     except Exception as e:
-        print(f"  Subprocess failed: {e}", flush=True)
+        print(f"  [direct] Batch failed: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
 
 
@@ -368,7 +348,7 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
         for batch_idx, batch_points in enumerate(all_batches):
             print(f"\n  🚀 Batch {batch_idx + 1}/{total_batches} ({len(batch_points)} points)", flush=True)
 
-            batch_results = _run_batch_subprocess(keyword, business_name, batch_points)
+            batch_results = _run_batch_direct(keyword, business_name, batch_points)
 
             for result in batch_results:
                 point = result['point']
