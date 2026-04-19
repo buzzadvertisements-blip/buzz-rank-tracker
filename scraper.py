@@ -66,9 +66,15 @@ async def _extract_top_businesses(page, business_name: str, top_n: int = 5):
     מחזיר (rank, businesses_list)
     """
     try:
-        await page.wait_for_selector('div[role="feed"]', timeout=15000)
+        # חכה לfeed עם ילדים — לא רק לקיום ה-feed
+        await page.wait_for_selector('div[role="feed"] > :first-child', timeout=12000)
     except:
-        await asyncio.sleep(5)
+        # אם אין feed, חכה עוד ונסה שוב
+        await asyncio.sleep(3)
+        try:
+            await page.wait_for_selector('div[role="feed"] > :first-child', timeout=8000)
+        except:
+            pass
 
     try:
         items_data = await page.evaluate('''(topN) => {
@@ -205,24 +211,17 @@ async def _run_batch_async(keyword, business_name, points):
 
                 url = f"https://www.google.com/maps/search/{keyword_url}/@{point['lat']},{point['lng']},13z?hl=en"
                 try:
-                    await page.goto(url, timeout=25000, wait_until='domcontentloaded')
-                    await asyncio.sleep(5)
-
-                    # דיבוג — בדוק מצב הדף
-                    page_state = await page.evaluate('''() => {
-                        const feed = document.querySelector('div[role="feed"]');
-                        const consent = document.querySelector('form[action*="consent"]');
-                        return {
-                            hasFeed: !!feed,
-                            feedChildren: feed ? feed.children.length : 0,
-                            hasConsent: !!consent,
-                            title: document.title.substring(0, 60),
-                            bodyLen: document.body.innerText.length
-                        };
-                    }''')
-                    print(f"  [{i+1}/{len(points)}] page: feed={page_state['hasFeed']}, children={page_state['feedChildren']}, consent={page_state['hasConsent']}, bodyLen={page_state['bodyLen']}", file=sys.stderr, flush=True)
+                    await page.goto(url, timeout=25000, wait_until='load')
+                    await asyncio.sleep(3)
 
                     rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
+
+                    # retry: אם נכשל, חכה ונסה שוב
+                    if rank == 20 and len(businesses) == 0:
+                        print(f"  [{i+1}/{len(points)}] retry...", file=sys.stderr, flush=True)
+                        await asyncio.sleep(3)
+                        rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
+
                     print(f"  [{i+1}/{len(points)}] ({point['lat']:.4f},{point['lng']:.4f}) → rank={rank}", file=sys.stderr, flush=True)
                 except Exception as e:
                     print(f"  [{i+1}/{len(points)}] ERROR: {e}", file=sys.stderr, flush=True)
