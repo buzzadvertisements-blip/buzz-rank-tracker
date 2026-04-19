@@ -265,12 +265,17 @@ async def _run_batch_async(keyword, business_name, points):
 
 def _run_batch_direct(keyword, business_name, points):
     """
-    מריץ batch ישירות בתהליך הנוכחי עם asyncio.run().
-    debug-scrape הוכיח שזה עובד — subprocess לא.
+    מריץ batch ישירות — בדיוק כמו debug-scrape endpoint שעובד.
+    משתמש ב-new_event_loop (לא asyncio.run) כי זה רץ מ-threading.Thread.
     """
     try:
         print(f"  [direct] Running batch of {len(points)} points...", flush=True)
-        results = asyncio.run(_run_batch_async(keyword, business_name, points))
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            results = loop.run_until_complete(_run_batch_async(keyword, business_name, points))
+        finally:
+            loop.close()
         print(f"  [direct] Batch done, got {len(results)} results", flush=True)
         return results
     except Exception as e:
