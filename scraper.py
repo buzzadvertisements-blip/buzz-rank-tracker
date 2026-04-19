@@ -30,7 +30,7 @@ BROWSER_ARGS = [
 ]
 
 # כמה נקודות לעבד בכל תהליך-בן (subprocess)
-BATCH_SIZE = 8
+BATCH_SIZE = 4
 
 # כמה תהליכי-בן להריץ במקביל (Render free = 512MB, כרומיום צורך ~200MB)
 MAX_PARALLEL = 1
@@ -208,10 +208,24 @@ async def _run_batch_async(keyword, business_name, points):
                     await page.goto(url, timeout=25000, wait_until='domcontentloaded')
                     await asyncio.sleep(5)
 
+                    # דיבוג — בדוק מצב הדף
+                    page_state = await page.evaluate('''() => {
+                        const feed = document.querySelector('div[role="feed"]');
+                        const consent = document.querySelector('form[action*="consent"]');
+                        return {
+                            hasFeed: !!feed,
+                            feedChildren: feed ? feed.children.length : 0,
+                            hasConsent: !!consent,
+                            title: document.title.substring(0, 60),
+                            bodyLen: document.body.innerText.length
+                        };
+                    }''')
+                    print(f"  [{i+1}/{len(points)}] page: feed={page_state['hasFeed']}, children={page_state['feedChildren']}, consent={page_state['hasConsent']}, bodyLen={page_state['bodyLen']}", file=sys.stderr, flush=True)
+
                     rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
-                    print(f"  [{i+1}/{len(points)}] ({point['lat']:.4f},{point['lng']:.4f}) → rank={rank}", flush=True)
+                    print(f"  [{i+1}/{len(points)}] ({point['lat']:.4f},{point['lng']:.4f}) → rank={rank}", file=sys.stderr, flush=True)
                 except Exception as e:
-                    print(f"  [{i+1}/{len(points)}] ERROR: {e}", flush=True)
+                    print(f"  [{i+1}/{len(points)}] ERROR: {e}", file=sys.stderr, flush=True)
                     rank, businesses = 20, []
 
                 results.append({
@@ -225,25 +239,42 @@ async def _run_batch_async(keyword, business_name, points):
     return results
 
 
-def _run_batch_direct(keyword, business_name, points):
+def _run_batch_subprocess(keyword, business_name, points):
     """
-    מריץ batch ישירות — בדיוק כמו debug-scrape endpoint שעובד.
-    משתמש ב-new_event_loop (לא asyncio.run) כי זה רץ מ-threading.Thread.
+    מריץ batch בתהליך-בן נפרד.
+    subprocess עובד (scan #8 batch 1 הושלם) — threading.Thread לא עובד עם Playwright.
     """
+    batch_input = json.dumps({
+        'keyword': keyword,
+        'business_name': business_name,
+        'points': points
+    })
+
     try:
-        print(f"  [direct] Running batch of {len(points)} points...", flush=True)
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            results = loop.run_until_complete(_run_batch_async(keyword, business_name, points))
-        finally:
-            loop.close()
-        print(f"  [direct] Batch done, got {len(results)} results", flush=True)
-        return results
+        result = subprocess.run(
+            [sys.executable, os.path.abspath(__file__), '--batch-worker'],
+            input=batch_input,
+            capture_output=True,
+            text=True,
+            timeout=180
+        )
+
+        # תמיד הדפס stderr לדיבוג
+        if result.stderr and result.stderr.strip():
+            print(f"  [subprocess stderr]:\n{result.stderr[:3000]}", flush=True)
+
+        if result.returncode == 0 and result.stdout.strip():
+            return json.loads(result.stdout.strip())
+        else:
+            print(f"  Subprocess error (rc={result.returncode})", flush=True)
+            if result.stdout:
+                print(f"  [stdout]: {result.stdout[:500]}", flush=True)
+            return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
+    except subprocess.TimeoutExpired:
+        print(f"  Subprocess timeout for batch of {len(points)} points", flush=True)
+        return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
     except Exception as e:
-        print(f"  [direct] Batch failed: {e}", flush=True)
-        import traceback
-        traceback.print_exc()
+        print(f"  Subprocess failed: {e}", flush=True)
         return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
 
 
@@ -315,7 +346,7 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
         for batch_idx, batch_points in enumerate(all_batches):
             print(f"\n  🚀 Batch {batch_idx + 1}/{total_batches} ({len(batch_points)} points)", flush=True)
 
-            batch_results = _run_batch_direct(keyword, business_name, batch_points)
+            batch_results = _run_batch_subprocess(keyword, business_name, batch_points)
 
             for result in batch_results:
                 point = result['point']
