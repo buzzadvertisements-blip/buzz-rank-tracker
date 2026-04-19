@@ -212,14 +212,55 @@ async def _run_batch_async(keyword, business_name, points):
                 url = f"https://www.google.com/maps/search/{keyword_url}/@{point['lat']},{point['lng']},13z?hl=en"
                 try:
                     await page.goto(url, timeout=25000, wait_until='domcontentloaded')
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(5)
+
+                    # טפל בדיאלוג הסכמה לעוגיות (רק בנקודה הראשונה)
+                    if i == 0:
+                        try:
+                            accepted = await page.evaluate('''() => {
+                                const buttons = document.querySelectorAll('button, form[action*="consent"] button');
+                                for (const btn of buttons) {
+                                    const txt = (btn.innerText || '').toLowerCase().trim();
+                                    if (txt === 'accept all' || txt === 'i agree' || txt === 'agree' || txt.includes('accept')) {
+                                        btn.click();
+                                        return true;
+                                    }
+                                }
+                                return false;
+                            }''')
+                            if accepted:
+                                print(f"  [{i+1}/{len(points)}] consent accepted, waiting...", file=sys.stderr, flush=True)
+                                await asyncio.sleep(3)
+                        except:
+                            pass
 
                     rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
 
                     # retry: אם נכשל, חכה ונסה שוב
                     if rank == 20 and len(businesses) == 0:
-                        print(f"  [{i+1}/{len(points)}] retry...", file=sys.stderr, flush=True)
-                        await asyncio.sleep(3)
+                        print(f"  [{i+1}/{len(points)}] retry — dumping page state...", file=sys.stderr, flush=True)
+                        # דיאגנוסטיקה: הדפס מצב הדף
+                        try:
+                            diag = await page.evaluate('''() => {
+                                const feed = document.querySelector('div[role="feed"]');
+                                const consent = document.querySelector('form[action*="consent"]');
+                                const bodyText = document.body.innerText.substring(0, 500);
+                                return {
+                                    hasFeed: !!feed,
+                                    feedChildren: feed ? feed.children.length : 0,
+                                    hasConsent: !!consent,
+                                    url: window.location.href,
+                                    title: document.title,
+                                    bodyPreview: bodyText
+                                };
+                            }''')
+                            print(f"  [{i+1}/{len(points)}] diag: feed={diag.get('hasFeed')}, children={diag.get('feedChildren')}, consent={diag.get('hasConsent')}, title={diag.get('title','')[:60]}", file=sys.stderr, flush=True)
+                            if diag.get('feedChildren', 0) == 0:
+                                print(f"  [{i+1}/{len(points)}] body: {diag.get('bodyPreview','')[:300]}", file=sys.stderr, flush=True)
+                        except Exception as de:
+                            print(f"  [{i+1}/{len(points)}] diag error: {de}", file=sys.stderr, flush=True)
+
+                        await asyncio.sleep(5)
                         rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
 
                     print(f"  [{i+1}/{len(points)}] ({point['lat']:.4f},{point['lng']:.4f}) → rank={rank}", file=sys.stderr, flush=True)
