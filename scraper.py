@@ -174,14 +174,21 @@ def _mock_rank():
 # ── עובד Subprocess — מריץ batch של נקודות בתהליך נפרד ──
 
 async def _run_batch_async(keyword, business_name, points):
-    """מריץ batch של נקודות בדפדפן אחד — context אחד, cookies נשמרים"""
+    """
+    מריץ batch של נקודות בדפדפן אחד.
+    מינימלי — מבוסס ישירות על debug-scrape שעובד.
+    """
     results = []
     keyword_url = '+'.join(keyword.strip().split())
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=BROWSER_ARGS)
+        browser = await p.chromium.launch(headless=True, args=[
+            '--no-sandbox', '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage', '--disable-gpu',
+            '--single-process', '--window-size=1280,720',
+        ])
         context = await browser.new_context(
-            user_agent=random.choice(USER_AGENTS),
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             viewport={'width': 1280, 'height': 720},
             locale='en-US',
             timezone_id='America/New_York',
@@ -189,66 +196,22 @@ async def _run_batch_async(keyword, business_name, points):
             permissions=['geolocation'],
         )
         page = await context.new_page()
-        await page.route('**/*.{png,jpg,jpeg,gif,webp,svg,mp4,woff,woff2}',
-                        lambda route: route.abort())
-        await page.route('**/recaptcha/**', lambda route: route.abort())
 
         try:
             for i, point in enumerate(points):
-                # עדכן geolocation
                 await context.set_geolocation(
                     {'latitude': point['lat'], 'longitude': point['lng']}
                 )
 
                 url = f"https://www.google.com/maps/search/{keyword_url}/@{point['lat']},{point['lng']},13z?hl=en"
                 try:
-                    await page.goto(url, timeout=20000, wait_until='domcontentloaded')
-
-                    # בנקודה הראשונה — חכה יותר וטפל בהסכמה עם JS
-                    if i == 0:
-                        await asyncio.sleep(3)
-                        # טיפול בהסכמה עם JavaScript בלבד (ללא :has-text)
-                        consent_result = await page.evaluate('''() => {
-                            // חפש כפתורי הסכמה
-                            const buttons = document.querySelectorAll('button');
-                            for (const btn of buttons) {
-                                const text = (btn.innerText || '').toLowerCase().trim();
-                                if (text === 'accept all' || text === 'reject all' ||
-                                    text === 'i agree' || text === 'agree' ||
-                                    text === 'accept' || text === 'consent') {
-                                    btn.click();
-                                    return 'clicked: ' + text;
-                                }
-                            }
-                            // חפש גם בטפסי consent
-                            const form = document.querySelector('form[action*="consent"]');
-                            if (form) {
-                                const submitBtn = form.querySelector('button');
-                                if (submitBtn) { submitBtn.click(); return 'clicked consent form button'; }
-                            }
-                            return 'no consent dialog found';
-                        }''')
-                        print(f"  [consent] {consent_result}", file=sys.stderr)
-                        await asyncio.sleep(1)
-                    else:
-                        await asyncio.sleep(random.uniform(2.0, 3.0))
-
-                    # דיבוג: בדוק מצב הדף
-                    page_state = await page.evaluate('''() => {
-                        const feed = document.querySelector('div[role="feed"]');
-                        return {
-                            hasFeed: !!feed,
-                            feedChildren: feed ? feed.children.length : 0,
-                            url: window.location.href.substring(0, 80),
-                            title: document.title.substring(0, 50),
-                        };
-                    }''')
-                    print(f"  [point {i+1}/{len(points)}] feed={page_state['hasFeed']}, children={page_state['feedChildren']}", file=sys.stderr)
+                    await page.goto(url, timeout=25000, wait_until='domcontentloaded')
+                    await asyncio.sleep(5)
 
                     rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
-                    print(f"  [point {i+1}/{len(points)}] ({point['lat']:.4f},{point['lng']:.4f}) → rank={rank}, biz={len(businesses)}", file=sys.stderr)
+                    print(f"  [{i+1}/{len(points)}] ({point['lat']:.4f},{point['lng']:.4f}) → rank={rank}", flush=True)
                 except Exception as e:
-                    print(f"  [point {i+1}/{len(points)}] ERROR at ({point['lat']},{point['lng']}): {e}", file=sys.stderr)
+                    print(f"  [{i+1}/{len(points)}] ERROR: {e}", flush=True)
                     rank, businesses = 20, []
 
                 results.append({
@@ -256,7 +219,6 @@ async def _run_batch_async(keyword, business_name, points):
                     'rank': rank,
                     'businesses': businesses
                 })
-                await asyncio.sleep(random.uniform(0.3, 0.8))
         finally:
             await browser.close()
 
