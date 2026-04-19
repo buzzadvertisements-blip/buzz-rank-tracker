@@ -173,58 +173,19 @@ def _mock_rank():
 
 # ── עובד Subprocess — מריץ batch של נקודות בתהליך נפרד ──
 
-async def _accept_consent(page):
-    """אם יש דף הסכמת cookies של גוגל — לחץ Accept"""
-    try:
-        # חכה קצת לראות אם יש consent
-        consent_btn = await page.query_selector('button[aria-label="Accept all"]')
-        if consent_btn:
-            await consent_btn.click()
-            await asyncio.sleep(2)
-            print("  ✅ Accepted Google consent dialog", file=sys.stderr)
-            return True
-
-        # ניסיון נוסף — טפסי consent שונים
-        forms = await page.query_selector_all('form[action*="consent"]')
-        if forms:
-            for form in forms:
-                btn = await form.query_selector('button')
-                if btn:
-                    await btn.click()
-                    await asyncio.sleep(2)
-                    print("  ✅ Accepted consent form", file=sys.stderr)
-                    return True
-
-        # עוד ניסיון — "I agree" button
-        agree_btn = await page.query_selector('button:has-text("I agree")')
-        if not agree_btn:
-            agree_btn = await page.query_selector('button:has-text("Accept")')
-        if agree_btn:
-            await agree_btn.click()
-            await asyncio.sleep(2)
-            print("  ✅ Clicked agree/accept button", file=sys.stderr)
-            return True
-    except Exception as e:
-        print(f"  Consent handling: {e}", file=sys.stderr)
-    return False
-
-
 async def _run_batch_async(keyword, business_name, points):
-    """מריץ batch של נקודות בדפדפן אחד ומחזיר תוצאות"""
+    """מריץ batch של נקודות בדפדפן אחד — context אחד, cookies נשמרים"""
     results = []
     keyword_url = '+'.join(keyword.strip().split())
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=BROWSER_ARGS)
-
-        # ── context אחד לכל ה-batch — cookies נשמרים בין נקודות ──
-        first_point = points[0]
         context = await browser.new_context(
             user_agent=random.choice(USER_AGENTS),
             viewport={'width': 1280, 'height': 720},
             locale='en-US',
             timezone_id='America/New_York',
-            geolocation={'latitude': first_point['lat'], 'longitude': first_point['lng']},
+            geolocation={'latitude': points[0]['lat'], 'longitude': points[0]['lng']},
             permissions=['geolocation'],
         )
         page = await context.new_page()
@@ -232,36 +193,17 @@ async def _run_batch_async(keyword, business_name, points):
                         lambda route: route.abort())
         await page.route('**/recaptcha/**', lambda route: route.abort())
 
-        consent_handled = False
-
         try:
-            for point in points:
-                # עדכן geolocation לנקודה הנוכחית
+            for i, point in enumerate(points):
+                # עדכן geolocation
                 await context.set_geolocation(
                     {'latitude': point['lat'], 'longitude': point['lng']}
                 )
 
                 url = f"https://www.google.com/maps/search/{keyword_url}/@{point['lat']},{point['lng']},13z?hl=en"
                 try:
-                    await page.goto(url, timeout=25000, wait_until='domcontentloaded')
-
-                    # טפל ב-consent dialog בפעם הראשונה
-                    if not consent_handled:
-                        await asyncio.sleep(3)
-                        accepted = await _accept_consent(page)
-                        if accepted:
-                            consent_handled = True
-                            # אחרי consent, נווט מחדש לתוצאות
-                            await page.goto(url, timeout=25000, wait_until='domcontentloaded')
-                            await asyncio.sleep(3)
-                        else:
-                            consent_handled = True  # אין consent, ממשיכים רגיל
-
-                    await asyncio.sleep(random.uniform(2.0, 3.5))
-
-                    # ── גלילה ברשימת התוצאות כדי לטעון עוד עסקים ──
-                    await _scroll_results(page)
-
+                    await page.goto(url, timeout=20000, wait_until='domcontentloaded')
+                    await asyncio.sleep(random.uniform(1.5, 2.5))
                     rank, businesses = await _extract_top_businesses(page, business_name, top_n=5)
                 except Exception as e:
                     print(f"  Error at ({point['lat']},{point['lng']}): {e}", file=sys.stderr)
@@ -279,36 +221,36 @@ async def _run_batch_async(keyword, business_name, points):
     return results
 
 
-async def _scroll_results(page):
-    """גולל את רשימת התוצאות ב-Google Maps כדי לטעון עוד עסקים"""
-    try:
-        feed = await page.query_selector('div[role="feed"]')
-        if not feed:
-            return
-
-        # גלול 3 פעמים כדי לטעון עד ~20 תוצאות
-        for _ in range(3):
-            await feed.evaluate('el => el.scrollTop = el.scrollHeight')
-            await asyncio.sleep(0.8)
-    except Exception:
-        pass
-
-
-def _run_batch_direct(keyword, business_name, points):
+def _run_batch_subprocess(keyword, business_name, points):
     """
-    מריץ batch ישירות (לא subprocess) — משתמש ב-asyncio.
-    יותר אמין מ-subprocess על Render free tier.
+    מריץ batch בתהליך-בן נפרד.
+    כל הזיכרון (כולל כרומיום) משתחרר כשהתהליך מסתיים.
     """
+    batch_input = json.dumps({
+        'keyword': keyword,
+        'business_name': business_name,
+        'points': points
+    })
+
     try:
-        loop = asyncio.new_event_loop()
-        results = loop.run_until_complete(_run_batch_async(keyword, business_name, points))
-        loop.close()
-        gc.collect()
-        return results
+        result = subprocess.run(
+            [sys.executable, os.path.abspath(__file__), '--batch-worker'],
+            input=batch_input,
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            return json.loads(result.stdout.strip())
+        else:
+            print(f"  Subprocess error (rc={result.returncode}): {result.stderr[:500]}", flush=True)
+            return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
+    except subprocess.TimeoutExpired:
+        print(f"  Subprocess timeout for batch of {len(points)} points", flush=True)
+        return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
     except Exception as e:
-        print(f"  Batch failed: {e}", flush=True)
-        import traceback
-        traceback.print_exc()
+        print(f"  Subprocess failed: {e}", flush=True)
         return [{'point': p, 'rank': 20, 'businesses': []} for p in points]
 
 
@@ -376,11 +318,11 @@ def run_scan_sync(scan_id: int, business_name: str, keyword: str,
         total_batches = len(all_batches)
         print(f"  📦 {total_batches} batches, running {MAX_PARALLEL} in parallel", flush=True)
 
-        # הרץ batches ברצף — batch אחד בכל פעם (ריצה ישירה, לא subprocess)
+        # הרץ batches ברצף (subprocess אחד בכל פעם)
         for batch_idx, batch_points in enumerate(all_batches):
             print(f"\n  🚀 Batch {batch_idx + 1}/{total_batches} ({len(batch_points)} points)", flush=True)
 
-            batch_results = _run_batch_direct(keyword, business_name, batch_points)
+            batch_results = _run_batch_subprocess(keyword, business_name, batch_points)
 
             for result in batch_results:
                 point = result['point']
